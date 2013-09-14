@@ -145,9 +145,61 @@ class What(object):
 
     def __init__(self, today=None, start_date=None, end_date=None):
         """Set up the range of dates we are interested in, and define 'today'
+
+        * 'today' is the date to regard as this day - the default is today.
+        * 'start_date' is the date to start reporting on - it defaults to the
+          day before 'today'
+        * 'end_date' is the date to stop reporting on - it defaults to the
+          four weeks after 'today'
+
+        All three should be datetime.date instances.
+
+        For instance:
+
+            >>> w = What(today=datetime.date(2013, 9, 14))
+            >>> w.today
+            datetime.date(2013, 9, 14)
+            >>> w.start_date
+            datetime.date(2013, 9, 13)
+            >>> w.end_date
+            datetime.date(2013, 10, 12)
+
+        but:
+
+            >>> w = What(today=datetime.date(2013, 9, 14),
+            ...          start_date=datetime.date(2013, 9, 15))
+            Traceback (most recent call last):
+            ...
+            GiveUp: Start date 2013-09-15 is after "today" 2013-09-14
+
+        and so on.
         """
         if today is None:
             today = datetime.date.today()
+
+        if start_date is None:
+            # Use "yesterday"
+            start_date = datetime.date.fromordinal(today.toordinal() - 1)
+
+        if end_date is None:
+            # Add four weeks
+            end_date = datetime.date.fromordinal(today.toordinal() + 4*7)
+
+        if start_date > today:
+            raise GiveUp('Start date {} is after "today" {}'.format(
+                start_date.isoformat(), today.isoformat()))
+
+        if end_date < today:
+            raise GiveUp('End date {} is before "today" {}'.format(
+                end_date.isoformat(), today.isoformat()))
+
+        if start_date > end_date:
+            raise GiveUp('Start date {} is after end date {}'.format(
+                start_date.isoformat(), end_date.isoformat()))
+
+        self.today = today
+        self.start_date = start_date
+        self.end_date = end_date
 
         outer_colon_methods = {':every': self.colon_every,
                                ':first': self.colon_first,
