@@ -139,115 +139,386 @@ def parse_date(text):
 
     return date, day_name, yearly
 
-def report_lines(lines):
-    r"""Report on the given lines.
-
-    For instance:
-
-        >>> report_lines([r'# This is a comment',
-        ...               r'1960* Feb 18 Thu, Tibs is \a, born in \y',
-        ...               r'2013 Sep 13 Fri, something # another comment',
-        ...               r'2013 Sep 14, another something',
-        ...               r'  which continues # this is a comment as well',
-        ...              ])
-        --> 1960-02-18 Thu yearly
-        --> 2013-09-13 Fri once
-        --> 2013-09-14 Sat once
-        ... which continues
-
-    and, at least temporarily:
-
-        >>> report_lines([r'w=1, something',
-        ...               r'e=2, something',
-        ...              ])
-        ??? w=1, something
-        ??? e=2, something
-
-    (this is deliberately not tested beyond that)
-
-    but:
-
-        >>> report_lines([r'Fred'])
-        Traceback (most recent call last):
-        ...
-        GiveUp: Missing comma in line 1
-        Unindented lines should be of the form <date>, <rest>
-        1: 'Fred'
-
-        >>> report_lines([r'Fred,'])
-        Traceback (most recent call last):
-        ...
-        GiveUp: No text after comma in line 1
-        Unindented lines should be of the form <date>, <rest>
-        1: 'Fred,'
-
-        >>> report_lines([r'Fred, Jim'])
-        Traceback (most recent call last):
-        ...
-        GiveUp: Error in line 1
-        Date must be <year>[*] <month-name> <day>
-                  or <year>[*] <month-name> <day> <day-name>
-        not 'Fred'
-        1: 'Fred, Jim'
+class What(object):
+    """Report on events over a range of time.
     """
-    lineno = 0
-    for line in lines:
-        lineno += 1
-        commentary = line.split('#')
-        text = commentary[0]
 
-        # Carefully lose trailing (but not leading) whitespace
-        text = text.rstrip()
+    def __init__(self, today=None, start_date=None, end_date=None):
+        """Set up the range of dates we are interested in, and define 'today'
+        """
+        if today is None:
+            today = datetime.date.today()
 
-        if not text:
-            continue
+        outer_colon_methods = {':every': self.colon_every,
+                               ':first': self.colon_first,
+                               ':second': self.colon_first,
+                               ':third': self.colon_first,
+                               ':fourth': self.colon_first,
+                               ':fifth': self.colon_first,
+                               ':last': self.colon_last,
+                               ':lastbutone': self.colon_lastbutone,
+                               ':easter': self.colon_easter,
+                               ':weekend': self.colon_weekend,
+                               ':weekday': self.colon_weekday,
+                              }
 
-        # Figure out if it is indented or not
-        rest = text.lstrip()
-        indented = rest != text
-        text = rest
+        boundary_colon_methods = {':except': self.colon_except,
+                                  ':until': self.colon_until,
+                                  ':weekly': self.colon_weekly,
+                                  ':fortnightly': self.colon_fortnightly,
+                                  ':monthly': self.colon_monthly,
+                                 }
 
-        if not indented:
+    def colon_every(self, words):
+        """Every <something>
+
+        <something> can be:
+
+            * <day-name> -- every <day-name> in each week
+            * <date> -- every <date> in each month
+        """
+        pass
+
+    def colon_first(self, words):
+        """The first <something>
+
+        <something> can be:
+
+            * <day-name> -- the first day of that name in a month
+        """
+        pass
+
+    def colon_second(self, words):
+        """The second <something>
+
+        <something> can be:
+
+            * <day-name> -- the second day of that name in a month
+        """
+        pass
+
+    def colon_third(self, words):
+        """The third <something>
+
+        <something> can be:
+
+            * <day-name> -- the third day of that name in a month
+        """
+        pass
+
+    def colon_fourth(self, words):
+        """The fourth <something>
+
+        <something> can be:
+
+            * <day-name> -- the fourth day of that name in a month
+        """
+        pass
+
+    def colon_fifth(self, words):
+        """The fifth <something> (maybe this will be useful sometime)
+
+        <something> can be:
+
+            * <day-name> -- the fifth day of that name in a month
+        """
+        pass
+
+    def colon_last(self, words):
+        """The last <something>
+
+        <something> can be:
+
+            * <day-name> -- the last day of that name in a month
+        """
+        pass
+
+    def colon_lastbutone(self, words):
+        """The last but one (penultimate) <something>
+
+        <something> can be:
+
+            * <day-name> -- the last but one day of that name in a month
+        """
+        pass
+
+    def colon_easter(self, words):
+        """A date related to Easter
+
+        <something> can be 'Fri', 'Sat', 'Sun', 'Mon'. Alternatively, it can be
+        a positive or negative number, for days relative to Easter Sunday - thus
+        colon_easter(-1) is the same a colon_easter('Sat')
+        """
+        pass
+
+    def colon_weekday(self, words):
+        """A weekday before/after a weekend
+
+        <something> can be:
+
+        * 'after' <year> <month-name> <day>
+        * 'before' <year> <month-name> <day>
+
+        If the specified day *is* a weekday ('Mon'..'Fri'), then it is used,
+        otherwise the nearest weekday before or after the given date is used.
+        """
+        pass
+
+    def colon_weekend(self, words):
+        """A weekend before/after a weekday
+
+        <something> can be:
+
+        * 'after' <year> <month-name> <day>
+        * 'before' <year> <month-name> <day>
+
+        If the specified day *is* a weekend ('Sat' or 'Sun'), then it is used,
+        otherwise the nearest weekend day before or after the given date is used.
+        """
+        pass
+
+    def colon_except(self, words):
+        """An exception condition.
+
+        <something> is <year> <month-name> <day>, and signifies the a date on
+        which a repetitive event should not actually happen.
+
+        Applies to the preceding date line
+        """
+        pass
+
+    def colon_until(self, words):
+        """An ending condition.
+
+        <something> is <year> <month-name> <day>, and signifies the last date
+        for a repetitive event.
+
+        Applies to the preceding date line
+        """
+        pass
+
+    def colon_weekly(self, words):
+        """Repeating weekly.
+
+        'words' should be empty.
+
+        Applies to the preceding date line
+        """
+        pass
+
+    def colon_fortnightly(self, words):
+        """Repeating fortnightly
+
+        'words' should be empty.
+
+        Applies to the preceding date line
+        """
+        pass
+
+    def colon_monthly(self, words):
+        """Repeating monthly
+
+        'words' should be empty.
+
+        Applies to the preceding date line
+        """
+        pass
+
+    def yield_lines(self, lines):
+        """Yield interesting lines.
+
+        Returns lists of the form:
+
+            lineno, [text, ...]
+
+        Empty lines and comment lines are not returned. Indented lines have their
+        indentation removed, and are returned as the '...'.
+
+        For instance:
+
+            >>> w = What()
+            >>> lines = ['# A comment',
+            ...          'Line 2',
+            ...          'Line 3',
+            ...          '  line 3 continued',
+            ...          'Line 5',
+            ...          '  ',
+            ...          'Line 7  ',
+            ...          '  line 7 continued  ',
+            ...          '  even more line 7  ',
+            ...         ]
+            >>> for line in w.yield_lines(lines):
+            ...     print(line)
+            (2, ['Line 2'])
+            (3, ['Line 3', 'line 3 continued'])
+            (5, ['Line 5'])
+            (7, ['Line 7', 'line 7 continued', 'even more line 7'])
+
+        but:
+
+            >>> bad_lines = [' not line 1']
+            >>> for line in w.yield_lines(bad_lines):
+            ...     print(line)
+            Traceback (most recent call last):
+            ...
+            GiveUp: Line 1 is indented, but follows the start of file
+
+            >>> bad_lines = ['Line 1',
+            ...              '# a comment',
+            ...              '  not line 1',
+            ...             ]
+            >>> for line in w.yield_lines(bad_lines):
+            ...     print(line)
+            Traceback (most recent call last):
+            ...
+            GiveUp: Line 3 is indented, but follows a comment
+
+            >>> bad_lines = ['Line 1',
+            ...              '',
+            ...              '  not line 1',
+            ...             ]
+            >>> for line in w.yield_lines(bad_lines):
+            ...     print(line)
+            Traceback (most recent call last):
+            ...
+            GiveUp: Line 3 is indented, but follows an empty line
+        """
+        lineno = 0
+        last_was = 'the start of file'
+        this_start = 0
+        this_lines = []
+        for line in lines:
+            lineno += 1
+
+            # Carefully lose trailing (but not leading) whitespace
+            text = line.rstrip()
+
+            # Empty lines are ignored
+            if not text:
+                last_was = 'an empty line'
+                if this_lines:
+                    yield this_start, this_lines
+                    this_lines = []
+                continue
+
+            # Figure out if it is indented or not
+            rest = text.lstrip()
+            indented = rest != text
+            text = rest
+
+            # Any line with a hash in the first column is a comment
+            if text[0] == '#':
+                last_was = 'a comment'
+                if this_lines:
+                    yield this_start, this_lines
+                    this_lines = []
+                continue
+
+            if indented:
+                if this_lines:
+                    this_lines.append(text)
+                    last_was = 'an indented line'
+                else:
+                    raise GiveUp('Line {} is indented, but follows {}'.format(
+                        lineno, last_was))
+            else:
+                if this_lines:
+                    yield this_start, this_lines
+                this_start = lineno
+                this_lines = [text]
+                last_was = 'a date line'
+
+        if this_lines:
+            yield this_start, this_lines
+
+    def report_lines(self, lines):
+        r"""Report on the given lines.
+
+        For instance:
+
+            >>> w = What()
+            >>> w.report_lines([r'# This is a comment',
+            ...                r'1960* Feb 18 Thu, Tibs is \a, born in \y',
+            ...                r'2013 Sep 13 Fri, something # This is not a comment',
+            ...                r'2013 Sep 14, another something',
+            ...                r'  which continues',
+            ...                r':every Thu, Thomas singing lesson',
+            ...               ])
+            --> 1960-02-18 Thu yearly
+            --> 2013-09-13 Fri once
+            --> 2013-09-14 Sat once
+            ... which continues
+            ::: :every Thu
+
+        but:
+
+            >>> w.report_lines([r'Fred'])
+            Traceback (most recent call last):
+            ...
+            GiveUp: Missing comma in line 1
+            Unindented lines should be of the form <date>, <rest>
+            1: 'Fred'
+
+            >>> w.report_lines([r'Fred,'])
+            Traceback (most recent call last):
+            ...
+            GiveUp: No text after comma in line 1
+            Unindented lines should be of the form <date>, <rest>
+            1: 'Fred,'
+
+            >>> w.report_lines([r'Fred, Jim'])
+            Traceback (most recent call last):
+            ...
+            GiveUp: Error in line 1
+            Date must be <year>[*] <month-name> <day>
+                      or <year>[*] <month-name> <day> <day-name>
+            not 'Fred'
+            1: 'Fred, Jim'
+        """
+        lineno = 0
+        for first_lineno, this_lines in self.yield_lines(lines):
+
+            first_line = this_lines[0]
+            more_lines = this_lines[1:]
+
             # We always want <thing>, <rest>
-            parts = text.split(',')
+            parts = first_line.split(',')
             date_part = parts[0]
             rest = ','.join(parts[1:])
 
-            # For compatility with "when", we also, perhaps temorarily,
-            # accept <letter>=<expression> - this doesn't go anywhere near
-            # handling the actual syntax used, but does cope with that I've
-            # got in my example calendar file
-            if date_part[0] in ('e', 'm', 'w', 'y') and date_part[1] == '=':
-                print('??? {}'.format(text))
-                continue
-
             if not rest:
-                if ',' not in text:
+                if ',' not in first_line:
                     raise GiveUp('Missing comma in line {}\n'
                                  'Unindented lines should be of the form <date>, <rest>\n'
-                                 '{}: {!r}'.format(lineno, lineno, text))
+                                 '{}: {!r}'.format(first_lineno, first_lineno, first_line))
                 else:
                     raise GiveUp('No text after comma in line {}\n'
                                  'Unindented lines should be of the form <date>, <rest>\n'
-                                 '{}: {!r}'.format(lineno, lineno, text))
+                                 '{}: {!r}'.format(first_lineno, first_lineno, first_line))
+
+            # Check for a magic word
+            words = date_part.split()
+            if words[0][0] == ':':
+                print('::: {}'.format(date_part))
+                continue
 
             try:
                 date, day_name, yearly = parse_date(date_part)
             except GiveUp as e:
-                raise GiveUp('Error in line {}\n{}\n{}: {!r}'.format(lineno,
-                    e, lineno, text))
+                raise GiveUp('Error in line {}\n{}\n{}: {!r}'.format(first_lineno,
+                    e, first_lineno, first_line))
 
             print('--> {} {} {}'.format(date.isoformat(), day_name,
                 'yearly' if yearly else 'once'))
-        else:
-            # Indented lines are continuations
-            print('... {}'.format(text))
 
-def report_file(filename, start=None, end=None):
-    """Report on the information in the named file.
-    """
-    with open(filename) as fd:
-        report_lines(fd)
+            for text in more_lines:
+                print('... {}'.format(text))
+
+    def report_file(self, filename, start=None, end=None):
+        """Report on the information in the named file.
+        """
+        with open(filename) as fd:
+            self.report_lines(fd)
 
 def report(args):
     filename = None
@@ -265,6 +536,22 @@ def report(args):
             else:
                 print('The light is GREEN')
             return
+        elif word == '-for':
+            # Take a date and report as if today were that date
+            # Format of date should be as in the file, <year> <month> <day>
+            raise GiveUp('Not yet implemented')
+        elif word == '-calendar':
+            # Print a calendar, for the current month or the named month
+            # Format of date should be <year> <month>
+            raise GiveUp('Not yet implemented')
+        elif word == '-from':
+            # Report events starting with this date
+            # Format of date should be as in the file, <year> <month> <day>
+            raise GiveUp('Not yet implemented')
+        elif word == '-to':
+            # Report events ending with this date
+            # Format of date should be as in the file, <year> <month> <day>
+            raise GiveUp('Not yet implemented')
         elif word[0] == '-' and not os.path.exists(word):
             raise GiveUp('Unexpected switch {:r}'.format(word))
         elif not filename:
@@ -275,7 +562,6 @@ def report(args):
 
     if not filename:
         filename = 'calendar.txt'
-
     try:
         report_file(filename)
     except GiveUp as e:

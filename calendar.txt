@@ -82,19 +82,19 @@
 
 # -----------------------------------------------------------------------------
 # Regular events
-e=2, Eastercon
+:easter Fri, Eastercon
 
-* dec 25, Christmas Day
-* dec 26, Boxing Day
+:every dec 25, Christmas Day
+:every dec 26, Boxing Day
 
-w=Thu, 17:00 Thomas singing lesson 
-w=Tue & (a=1 | a=3), Joan Ipswich
-w=Tue & a=1, 19:30 CamPUG
+:every Thu, 17:00 Thomas singing lesson 
+  :except 2013 Sep 19, Doing something else
+:first Tue, Joan Ipswich
+:third Tue, Joan Ipswich
+:first, 19:30 CamPUG
 
 # Full backups happen overnight on the first Saturday of each month
-w=Sat & a=1, Full Backup
-
-w=Sat, ------------
+:first Sat, Full Backup
 
 # -----------------------------------------------------------------------------
 # And actual events
