@@ -139,11 +139,115 @@ def parse_date(text):
 
     return date, day_name, yearly
 
+def report_lines(lines):
+    r"""Report on the given lines.
+
+    For instance:
+
+        >>> report_lines([r'# This is a comment',
+        ...               r'1960* Feb 18 Thu, Tibs is \a, born in \y',
+        ...               r'2013 Sep 13 Fri, something # another comment',
+        ...               r'2013 Sep 14, another something',
+        ...               r'  which continues # this is a comment as well',
+        ...              ])
+        --> 1960-02-18 Thu yearly
+        --> 2013-09-13 Fri once
+        --> 2013-09-14 Sat once
+        ... which continues
+
+    and, at least temporarily:
+
+        >>> report_lines([r'w=1, something',
+        ...               r'e=2, something',
+        ...              ])
+        ??? w=1, something
+        ??? e=2, something
+
+    (this is deliberately not tested beyond that)
+
+    but:
+
+        >>> report_lines([r'Fred'])
+        Traceback (most recent call last):
+        ...
+        GiveUp: Missing comma in line 1
+        Unindented lines should be of the form <date>, <rest>
+        1: 'Fred'
+
+        >>> report_lines([r'Fred,'])
+        Traceback (most recent call last):
+        ...
+        GiveUp: No text after comma in line 1
+        Unindented lines should be of the form <date>, <rest>
+        1: 'Fred,'
+
+        >>> report_lines([r'Fred, Jim'])
+        Traceback (most recent call last):
+        ...
+        GiveUp: Error in line 1
+        Date must be <year>[*] <month-name> <day>
+                  or <year>[*] <month-name> <day> <day-name>
+        not 'Fred'
+        1: 'Fred, Jim'
+    """
+    lineno = 0
+    for line in lines:
+        lineno += 1
+        commentary = line.split('#')
+        text = commentary[0]
+
+        # Carefully lose trailing (but not leading) whitespace
+        text = text.rstrip()
+
+        if not text:
+            continue
+
+        # Figure out if it is indented or not
+        rest = text.lstrip()
+        indented = rest != text
+        text = rest
+
+        if not indented:
+            # We always want <thing>, <rest>
+            parts = text.split(',')
+            date_part = parts[0]
+            rest = ','.join(parts[1:])
+
+            # For compatility with "when", we also, perhaps temorarily,
+            # accept <letter>=<expression> - this doesn't go anywhere near
+            # handling the actual syntax used, but does cope with that I've
+            # got in my example calendar file
+            if date_part[0] in ('e', 'm', 'w', 'y') and date_part[1] == '=':
+                print('??? {}'.format(text))
+                continue
+
+            if not rest:
+                if ',' not in text:
+                    raise GiveUp('Missing comma in line {}\n'
+                                 'Unindented lines should be of the form <date>, <rest>\n'
+                                 '{}: {!r}'.format(lineno, lineno, text))
+                else:
+                    raise GiveUp('No text after comma in line {}\n'
+                                 'Unindented lines should be of the form <date>, <rest>\n'
+                                 '{}: {!r}'.format(lineno, lineno, text))
+
+            try:
+                date, day_name, yearly = parse_date(date_part)
+            except GiveUp as e:
+                raise GiveUp('Error in line {}\n{}\n{}: {!r}'.format(lineno,
+                    e, lineno, text))
+
+            print('--> {} {} {}'.format(date.isoformat(), day_name,
+                'yearly' if yearly else 'once'))
+        else:
+            # Indented lines are continuations
+            print('... {}'.format(text))
+
 def report_file(filename, start=None, end=None):
     """Report on the information in the named file.
     """
-    with open(file) as fd:
-        pass
+    with open(filename) as fd:
+        report_lines(fd)
 
 def report(args):
     filename = None
