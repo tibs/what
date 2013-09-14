@@ -563,7 +563,8 @@ def report(args):
     if not filename:
         filename = 'calendar.txt'
     try:
-        report_file(filename)
+        w = What()
+        w.report_file(filename)
     except GiveUp as e:
         raise GiveUp('Error reading file {!r}\n{}'.format(filename, e))
 
