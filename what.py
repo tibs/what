@@ -617,7 +617,7 @@ class What(object):
             except ValueError:
                 date = datetime.date(day=day, month=month, year=today.year+1)
             event = Event(date)
-            event.repeat_yearly()
+            event.repeat_yearly = True
 
         else:
             raise GiveUp('Expected one of:\n'
@@ -723,7 +723,7 @@ class What(object):
                              'not {!r}\n'
                              'Error reading <offset>, {}'.format(colon_what(colon_word, words), e))
 
-        today = self.today()
+        today = self.today
         easter = calc_easter(today.year)
         print(easter)
         date = easter + datetime.timedelta(days=offset)
@@ -741,7 +741,7 @@ class What(object):
             date = easter + datetime.timedelta(days=offset)
             print(date)
 
-        #raise GiveUp('NOT YET IMPLEMENTED')
+        return Event(date)
 
     def colon_event_weekmagic(self, colon_word, words):
         """A day relative to a date
