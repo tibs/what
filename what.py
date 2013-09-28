@@ -147,8 +147,9 @@ class GiveUp(Exception):
 
 def validate_day_name(date, day_name):
     if DAYS[date.weekday()] != day_name.capitalize():
-        raise GiveUp('{} {} {} is {}, not {}'.format(year, month_name,
-            day, DAYS[date.weekday()], day_name))
+        raise GiveUp('{} {} {} is {}, not {}'.format(date.year,
+            MONTH_NAME[date.month], date.day,
+            DAYS[date.weekday()], day_name))
 
 def day_after_date(date, day_name, today_ok=False):
     """Given a day name, return the date of that day *after* 'date'.
@@ -159,7 +160,7 @@ def day_after_date(date, day_name, today_ok=False):
         >>> day_after_date(sat, 'Sun')
         datetime.date(2013, 9, 29)
         >>> day_after_date(sat, 'Mon')
-        datetime.date(2013, 10, 3)
+        datetime.date(2013, 9, 30)
 
     if 'today_ok', then:
 
@@ -169,7 +170,7 @@ def day_after_date(date, day_name, today_ok=False):
     otherwise, we really *do* mean the day of that name *after* this date:
 
         >>> day_after_date(sat, 'Sat')
-        datetime.date(2013, 10, 1)
+        datetime.date(2013, 10, 5)
     """
     if today_ok and day_name == DAYS[date.weekday()]:
         return date
@@ -231,14 +232,14 @@ def calc_easter(year):
     day = f % 31 + 1
     return datetime.date(year, month, day)
 
-def parse_date(text):
-    """Given a text, turn it into a date.
+def parse_year_month_day(text):
+    """Given a text containing an actual date, turn it into a datetime date.
 
     'text' should be either three words, of the form:
 
         <year>[*] <month-name> <day>
 
-    of four words, of the form:
+    or four words, of the form:
 
         <year>[*] <month-name> <day> <day-name>
 
@@ -252,16 +253,16 @@ def parse_date(text):
 
     For instance:
 
-        >>> parse_date('2013 Sep 14')
+        >>> parse_year_month_day('2013 Sep 14')
         (datetime.date(2013, 9, 14), 'Sat', False)
-        >>> parse_date('2013* Sep 14')
+        >>> parse_year_month_day('2013* Sep 14')
         (datetime.date(2013, 9, 14), 'Sat', True)
-        >>> parse_date('2013 Sep 14 Sat')
+        >>> parse_year_month_day('2013 Sep 14 Sat')
         (datetime.date(2013, 9, 14), 'Sat', False)
-        >>> parse_date('2013* Sep 14 Sat')
+        >>> parse_year_month_day('2013* Sep 14 Sat')
         (datetime.date(2013, 9, 14), 'Sat', True)
 
-        >>> parse_date('Fred')
+        >>> parse_year_month_day('Fred')
         Traceback (most recent call last):
         ...
         GiveUp: Date must be <year>[*] <month-name> <day>
@@ -270,32 +271,32 @@ def parse_date(text):
 
     (that last aligns better if the "GiveUp: " is removed)
 
-        >>> parse_date('Fred Sep 14 Fri')
+        >>> parse_year_month_day('Fred Sep 14 Fri')
         Traceback (most recent call last):
         ...
         GiveUp: Year 'Fred' is not an integer
 
-        >>> parse_date('2013 Fred 14 Fri')
+        >>> parse_year_month_day('2013 Fred 14 Fri')
         Traceback (most recent call last):
         ...
         GiveUp: Month 'Fred' is not one of Jan..Feb
 
-        >>> parse_date('2013 Sep Fred Fri')
+        >>> parse_year_month_day('2013 Sep Fred Fri')
         Traceback (most recent call last):
         ...
         GiveUp: Day 'Fred' is not an integer
 
-        >>> parse_date('2013 Sep 14 Fred')
+        >>> parse_year_month_day('2013 Sep 14 Fred')
         Traceback (most recent call last):
         ...
         GiveUp: Day name 'Fred' is not one of Mon..Sun
 
-        >>> parse_date('2013 Sep 14 Fri')
+        >>> parse_year_month_day('2013 Sep 14 Fri')
         Traceback (most recent call last):
         ...
         GiveUp: 2013 Sep 14 is Sat, not Fri
 
-        >>> parse_date('2013 Sep 97')
+        >>> parse_year_month_day('2013 Sep 97')
         Traceback (most recent call last):
         ...
         GiveUp: Date '2013 Sep 97' is not a valid date: day is out of range for month
@@ -355,8 +356,8 @@ class Event(object):
         self.date = date
         self.text = None
 
-        if self.day_name is None:
-            pass
+        if day_name is None:
+            self.day_name = DAYS[date.weekday()]
         else:
             validate_day_name(date, day_name)
             self.day_name = day_name
@@ -373,7 +374,7 @@ class Event(object):
         self.text = text
 
     def __str__(self):
-        return '{:4d} {:3} {:2d} {:3s}, {}'.format(self.date.year,
+        return 'Event: {:4d} {:3} {:2d} {:3s}, {}'.format(self.date.year,
                 MONTH_NAME[self.date.month], self.date.day, self.day_name,
                 self.text)
 
@@ -526,6 +527,8 @@ class What(object):
         self.start_date = start_date
         self.end_date = end_date
 
+        self.yesterday = self.today - datetime.timedelta(days=1)
+
         self.colon_event_methods = {':every': self.colon_event_every,
                                     ':first': self.colon_event_first,
                                     ':second': self.colon_event_first,
@@ -563,7 +566,7 @@ class What(object):
             * <month-name> <day> -- every equivalent date, ":every Dec 25"
             * day <day> -- every <date> in each month, ":every day 8"
         """
-        today = datetime.date.today()
+        today = self.today
         if len(words) == 1:
             day_name = words[0].capitalize()
             if day_name not in DAYS:
@@ -572,7 +575,9 @@ class What(object):
             date = day_after_date(today, day_name, True)
             event = Event(date)
             event.set_repeat_every(7)
-        elif len(words) != 2:
+            return event
+
+        if len(words) != 2:
             raise GiveUp('Expected one of:\n'
                          '  :every <day-name>\n'
                          '  :every <month-name> <day>\n'
@@ -718,7 +723,7 @@ class What(object):
                              'not {!r}\n'
                              'Error reading <offset>, {}'.format(colon_what(colon_word, words), e))
 
-        today = datetime.date.today()
+        today = self.today()
         easter = calc_easter(today.year)
         print(easter)
         date = easter + datetime.timedelta(days=offset)
@@ -738,19 +743,6 @@ class What(object):
 
         #raise GiveUp('NOT YET IMPLEMENTED')
 
-    def colon_event_weekday(self, colon_word, words):
-        """A weekday before/after a weekend
-
-        <something> can be:
-
-        * 'after' <year> <month-name> <day>
-        * 'before' <year> <month-name> <day>
-
-        If the specified day *is* a weekday ('Mon'..'Fri'), then it is used,
-        otherwise the nearest weekday before or after the given date is used.
-        """
-        raise GiveUp('NOT YET IMPLEMENTED')
-
     def colon_event_weekmagic(self, colon_word, words):
         """A day relative to a date
 
@@ -760,16 +752,70 @@ class What(object):
         where <something> is a day name, or 'weekday', or 'weekend'
         """
         try:
-            day_name = words[0]
-            when = words[1]
-            date = ' '.join(words[2:])
+            day_name = colon_word[1:]
+            when = words[0]
+            date_part = ' '.join(words[1:])
         except IndexError:
                 raise GiveUp('Expected one of:\n'
                              '  :<something> before <year> <mon> <day> [<nam>]\n'
                              '  :<something> after <year> <mon> <day> [<nam>]\n'
                              'not {!r}'.format(colon_what(colon_word, words)))
 
-        raise GiveUp('NOT YET IMPLEMENTED')
+        if day_name.capitalize() in DAYS:
+            day_name = day_name.capitalize()
+        elif day_name not in ('weekend', 'weekday'):
+            raise GiveUp('Unexpected {!r}, expected one of:\n'
+                         '  :<something> before <year> <mon> <day> [<nam>]\n'
+                         '  :<something> after <year> <mon> <day> [<nam>]\n'
+                         'where <something> is Mon..Sun or weekday or weekend\n'
+                         'not {!r}'.format(day_name, colon_what(colon_word, words)))
+
+        eventlet = self.parse_date(date_part,
+                                  'it does not make sense inside {}'.format(
+                                   colon_what(colon_word, words)))
+        date = eventlet.date
+
+        if when not in ('before', 'after'):
+            raise GiveUp('Unexpected {!r}, expected one of:\n'
+                         '  :<something> before <year> <mon> <day> [<nam>]\n'
+                         '  :<something> after <year> <mon> <day> [<nam>]\n'
+                         'not {!r}'.format(when, colon_what(colon_word, words)))
+
+        if day_name == 'weekend' and when == 'after':
+            todays_day = DAYS[self.today.weekday()]
+            if todays_day == 'Sat':
+                day_name = 'Sun'
+            elif todays_day == 'Sun':
+                day_name = 'Sat'    # the next Saturday...
+            else:
+                day_name = 'Sat'
+        elif day_name == 'weekend' and when == 'before':
+            todays_day = DAYS[self.today.weekday()]
+            if todays_day == 'Sat':
+                day_name = 'Sun'    # the previous Sunday...
+            elif todays_day == 'Sun':
+                day_name = 'Sat'
+            else:
+                day_name = 'Sun'
+        elif day_name == 'weekday' and when == 'after':
+            todays_day = DAYS[self.today.weekday()]
+            if todays_day in ('Fri', 'Sat', 'Sun'):
+                day_name = 'Mon'
+            else:   # we know DAYS starts with Mon
+                day_name = DAYS[self.today.weekday()+1]
+        elif day_name == 'weekday' and when == 'before':
+            todays_day = DAYS[self.today.weekday()]
+            if todays_day in ('Sat', 'Sun', 'Mon'):
+                day_name = 'Fri'
+            else:   # we know DAYS starts with Mon, but we already dealt with that
+                day_name = DAYS[self.today.weekday()-1]
+
+        if when == 'after':
+            date = day_after_date(date, day_name)
+        else:
+            date = day_before_date(date, day_name)
+
+        return Event(date)
 
     def colon_condition_except(self, colon_word, event, words):
         """An exception condition.
@@ -947,6 +993,85 @@ class What(object):
         if this_lines:
             yield this_start, this_lines
 
+    def parse_date(self, date_part, not_yearly_reason=None):
+        """Parse something we accept as a date, and return an Event for it.
+
+        If 'not_yearly_reason', then a <year> <mon> <day> style date may not
+        have an asterisk after the <year>. If this is not a "false" value, then
+        it should be a string explaining why not...
+        """
+        # Check for a magic word
+        words = date_part.split()
+        if words[0][0] == ':':
+            colon_word = words[0].lower()
+            print('--> {}'.format(date_part))
+            try:
+                fn = self.colon_event_methods[colon_word]
+            except KeyError:
+                raise GiveUp('Unexpected ":" word as <date>, {!r}'.format(colon_word))
+            print('---  fn {}'.format(fn.__name__))
+            event = fn(colon_word, words[1:])
+        else:
+            date, day_name, yearly = parse_year_month_day(date_part)
+            print('--> {} {} {}'.format(date.isoformat(), day_name,
+                'yearly' if yearly else 'once'))
+            event = Event(date, day_name)
+            if yearly and not_yearly_reason:
+                raise GiveUp('The "yearly" asterisk is not allowed in {}\n'
+                             '{}'.format(date_part, not_yearly_reason))
+            else:
+                event.set_repeat_yearly()
+        return event
+
+    def parse_event(self, first_lineno, first_line, more_lines):
+        """Create an event from the lines describing it.
+        """
+
+        # We always want <thing>, <rest>
+        parts = first_line.split(',')
+        date_part = parts[0]
+        rest = ','.join(parts[1:])
+
+        if not rest:
+            if ',' not in first_line:
+                raise GiveUp('Missing comma in line {}\n'
+                             'Unindented lines should be of the form <date>, <rest>\n'
+                             '{}: {!r}'.format(first_lineno, first_lineno, first_line))
+            else:
+                raise GiveUp('No text after comma in line {}\n'
+                             'Unindented lines should be of the form <date>, <rest>\n'
+                             '{}: {!r}'.format(first_lineno, first_lineno, first_line))
+
+        try:
+            event = self.parse_date(date_part)
+        except GiveUp as e:
+            raise GiveUp('Error in line {}\n'
+                         '{}\n'
+                         '{}: {!r}'.format(first_lineno, e,
+                                           first_lineno, first_line))
+        event.set_text(rest)
+
+        this_lineno = first_lineno
+        for text in more_lines:
+            this_lineno += 1
+            print('... {}'.format(text))
+            words = text.split()
+            if words[0][0] == ':':
+                colon_word = words[0].lower()
+                try:
+                    fn = self.colon_condition_methods[colon_word]
+                    print('---  fn {}'.format(fn.__name__))
+                    fn(colon_word, event, words[1:])
+                except KeyError:
+                    raise GiveUp('Error in line {}\n'
+                                 'Unexpected ":" word as <condition>, {!r}\n{}: {!r}'.format(
+                                     this_lineno, colon_word, this_lineno, text))
+            else:
+                raise GiveUp('Error in line {}\n'
+                             'Indented line should be a <condition>, starting with a colon,\n'
+                             '{}: {!r}'.format(this_lineno, this_lineno, text))
+        return event
+
     def report_lines(self, lines):
         r"""Report on the given lines.
 
@@ -954,17 +1079,33 @@ class What(object):
 
             >>> w = What()
             >>> w.report_lines([r'# This is a comment',
-            ...                r'1960* Feb 18 Thu, Tibs is \a, born in \y',
+            ...                r'1960* Feb 18 Thu, Tibs is :age, born in :year',
             ...                r'2013 Sep 13 Fri, something # This is not a comment',
             ...                r'2013 Sep 14, another something',
             ...                r'  :every 4 days',
             ...                r':every Thu, Thomas singing lesson',
+            ...                r':weekday after 2013 Sep 28, Should be a Monday',
+            ...                r':Mon after 2013 Sep 28, Should be the same',
             ...               ])
             --> 1960-02-18 Thu yearly
+            Event: 1960 Feb 18 Thu,  Tibs is :age, born in :year
             --> 2013-09-13 Fri once
+            Event: 2013 Sep 13 Fri,  something # This is not a comment
             --> 2013-09-14 Sat once
-            ... which continues
-            ::: :every Thu
+            ... :every 4 days
+            ---  fn colon_condition_repeat
+            Event: 2013 Sep 14 Sat,  another something
+            --> :every Thu
+            ---  fn colon_event_every
+            Event: 2013 Oct  3 Thu,  Thomas singing lesson
+            --> :weekday after 2013 Sep 28
+            ---  fn colon_event_weekmagic
+            --> 2013-09-28 Sat once
+            Event: 2013 Sep 30 Mon,  Should be a Monday
+            --> :Mon after 2013 Sep 28
+            ---  fn colon_event_weekmagic
+            --> 2013-09-28 Sat once
+            Event: 2013 Sep 30 Mon,  Should be the same
 
         but:
 
@@ -991,76 +1132,9 @@ class What(object):
             not 'Fred'
             1: 'Fred, Jim'
         """
-        lineno = 0
         for first_lineno, this_lines in self.yield_lines(lines):
-
-            first_line = this_lines[0]
-            more_lines = this_lines[1:]
-
-            # We always want <thing>, <rest>
-            parts = first_line.split(',')
-            date_part = parts[0]
-            rest = ','.join(parts[1:])
-
-            if not rest:
-                if ',' not in first_line:
-                    raise GiveUp('Missing comma in line {}\n'
-                                 'Unindented lines should be of the form <date>, <rest>\n'
-                                 '{}: {!r}'.format(first_lineno, first_lineno, first_line))
-                else:
-                    raise GiveUp('No text after comma in line {}\n'
-                                 'Unindented lines should be of the form <date>, <rest>\n'
-                                 '{}: {!r}'.format(first_lineno, first_lineno, first_line))
-
-            # Check for a magic word
-            words = date_part.split()
-            if words[0][0] == ':':
-                colon_word = words[0].lower()
-                print('--> {}'.format(date_part))
-                try:
-                    fn = self.colon_event_methods[colon_word]
-                    print('---  fn {}'.format(fn.__name__))
-                    event = fn(colon_word, words[1:])
-                    event.set_text(rest)
-                except KeyError:
-                    raise GiveUp('Error in line {}\n'
-                                 'Unexpected ":" word as <date>, {!r}\n'
-                                 '{}: {!r}'.format(lineno, colon_word, lineno, first_line))
-                continue
-
-            try:
-                date, day_name, yearly = parse_date(date_part)
-            except GiveUp as e:
-                raise GiveUp('Error in line {}\n{}\n{}: {!r}'.format(first_lineno,
-                    e, first_lineno, first_line))
-
-            event = Event(date, day_name)
-            event.set_text(rest)
-            if yearly:
-                event.set_repeat_yearly()
-
-            print('--> {} {} {}'.format(date.isoformat(), day_name,
-                'yearly' if yearly else 'once'))
-
-            this_lineno = first_lineno
-            for text in more_lines:
-                this_lineno += 1
-                print('... {}'.format(text))
-                words = text.split()
-                if words[0][0] == ':':
-                    colon_word = words[0].lower()
-                    try:
-                        fn = self.colon_condition_methods[colon_word]
-                        print('---  fn {}'.format(fn.__name__))
-                        fn(colon_word, event, words[1:])
-                    except KeyError:
-                        raise GiveUp('Error in line {}\n'
-                                     'Unexpected ":" word as <condition>, {!r}\n{}: {!r}'.format(
-                                         this_lineno, colon_word, this_lineno, text))
-                else:
-                    raise GiveUp('Error in line {}\n'
-                                 'Indented line should be a <condition>, starting with a colon,\n'
-                                 '{}: {!r}'.format(this_lineno, this_lineno, text))
+            event = self.parse_event(first_lineno, this_lines[0], this_lines[1:])
+            print(event)
 
     def report_file(self, filename, start=None, end=None):
         """Report on the information in the named file.
