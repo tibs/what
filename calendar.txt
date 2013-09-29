@@ -1,9 +1,9 @@
 # -----------------------------------------------------------------------------
 # Birthdays
-1960* Feb 18, Birthday: Tibs is \a, born in \y
-1958* Dec 28, Birthday: Joan is \a, born in \y
-1996* Apr  2, Birthday: Michael is \a, born in \y
-1998* Dec 26, Birthday: Thomas is \a, born in \y
+1960* Feb 18, Birthday: Tibs is :age, born in :year
+1958* Dec 28, Birthday: Joan is :age, born in :year
+1996* Apr  2, Birthday: Michael is :age, born in :year
+1998* Dec 26, Birthday: Thomas is :age, born in :year
 
 # -----------------------------------------------------------------------------
 # Holidays
@@ -91,7 +91,7 @@
   :except 2013 Sep 19, Doing something else
 :first Tue, Joan Ipswich
 :third Tue, Joan Ipswich
-:first, 19:30 CamPUG
+:first Tue, 19:30 CamPUG
 
 # Full backups happen overnight on the first Saturday of each month
 :first Sat, Full Backup
