@@ -57,7 +57,8 @@ years) will be recognised in <text>, and replaced with the appropriate number
       ':easter -1 2013' would mean the same as ':easter Sat 2013'.
 
     (Including the year on :easter makes it clearer what is intended - a
-    mechanism for specifying "every easter" can be added later if needed.)
+    mechanism for specifying "every easter" can be added later if needed,
+    maybe just by allowing the year to be omitted.)
 
     Also, it is possible to select a day before or after a particular event,
     using:
@@ -554,37 +555,57 @@ class Event(object):
         the empty list if there are no occurrences in the given range.
         """
         # Maybe sanity check our conditions lazily, at this point...
+        # ...or maybe not
+
         dates = set()
 
         if self.repeat_until:
             if self.repeat_until < start:
+                print('repeat until {} is before start {} - stopping'.format(self.repeat_until, start))
                 return set()
             elif self.repeat_until < end:
+                print('repeat until {} is before end {} - adjusting range'.format(self.repeat_until, end))
                 end = self.repeat_until
 
         if start <= self.date <= end:
             dates.add(self.date)
 
-        # ... and other dates we might generate
         if self.repeat_yearly:
-            pass
+            d = self.date.replace(year=start.year)
+            while start <= d <= end:
+                dates.add(d)
+                d = d.replace(year=d.year+1)
 
         if self.repeat_every_N_days:
             for n in sorted(self.repeat_every_N_days):
-                pass
+                dt = datetime.timedelta(days=n)
+                d = self.date + dt
+                while start <= d <= end:
+                    dates.add(d)
+                    d = d + dt
 
+        # XXX This needs testing
         if self.repeat_on_Nth_of_month:
             for n in sorted(self.repeat_on_Nth_of_month):
-                pass
+                d = self.date
+                while True:
+                    if d.month < 12:
+                        d = d.replace(month=d.month+1)
+                    else:
+                        d = d.replace(month=1, year=d.year+1)
+                    if d > end:
+                        break
+                    if d >= start:
+                        dates.add(d)
 
         if self.repeat_ordinal:
             for index, day_name in sorted(self.repeat_ordinal):
-                pass
+                print('ignoring repeat on {}<th> {} of month'.format(index, day_name))
 
         if self.not_on:
             for date, reason in sorted(self.not_on):
-                # Strike out dates if they were occurring...
-                pass
+                if date in dates:
+                    dates.remove(date)
 
         things = []
         for date in dates:
@@ -1562,6 +1583,8 @@ def report(args):
         for date, text in sorted(things):
             print('{} {} {:2} {}, {}'.format(date.year,
                 MONTH_NAME[date.month], date.day, DAYS[date.weekday()], text))
+
+        print('start {} .. today {} .. end {}'.format(w.start, w.today, w.end))
 
 if __name__ == '__main__':
     args = sys.argv[1:]
