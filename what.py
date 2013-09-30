@@ -554,8 +554,43 @@ class Event(object):
         the empty list if there are no occurrences in the given range.
         """
         # Maybe sanity check our conditions lazily, at this point...
-        print('Calculating occurrences from {} to {}'.format(start, end))
-        return []
+        dates = set()
+
+        if self.repeat_until:
+            if self.repeat_until < start:
+                return set()
+            elif self.repeat_until < end:
+                end = self.repeat_until
+
+        if start <= self.date <= end:
+            dates.add(self.date)
+
+        # ... and other dates we might generate
+        if self.repeat_yearly:
+            pass
+
+        if self.repeat_every_N_days:
+            for n in sorted(self.repeat_every_N_days):
+                pass
+
+        if self.repeat_on_Nth_of_month:
+            for n in sorted(self.repeat_on_Nth_of_month):
+                pass
+
+        if self.repeat_ordinal:
+            for index, day_name in sorted(self.repeat_ordinal):
+                pass
+
+        if self.not_on:
+            for date, reason in sorted(self.not_on):
+                # Strike out dates if they were occurring...
+                pass
+
+        things = []
+        for date in dates:
+            things.append((date, self.text))
+
+        return things
 
 def colon_what(colon_word, words):
     """A simple utility to re-join :<word> commands for error reporting.
@@ -567,6 +602,8 @@ def colon_what(colon_word, words):
 
 class What(object):
     """Report on events over a range of time.
+
+    As it is now used, does What merit being a class?
     """
 
     def __init__(self, today=None, start=None, end=None, at_words=None):
@@ -1441,6 +1478,15 @@ class What(object):
             events = self.parse_lines(fd)
         return events
 
+    def find_events(self, events):
+        """Return a set of (date, text) tuples for the events in our date range.
+        """
+        things = set()
+        for event in events:
+            things.update(event.get_dates(self.start, self.end))
+
+        return things
+
 def report(args):
 
     filename = None
@@ -1509,6 +1555,13 @@ def report(args):
         # Output the events for this timespan
         for event in sorted(events):
             print(repr(event))
+
+        print('==============================================================')
+        things = w.find_events(events)
+
+        for date, text in sorted(things):
+            print('{} {} {:2} {}, {}'.format(date.year,
+                MONTH_NAME[date.month], date.day, DAYS[date.weekday()], text))
 
 if __name__ == '__main__':
     args = sys.argv[1:]
