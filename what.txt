@@ -82,7 +82,7 @@
 
 # -----------------------------------------------------------------------------
 # Regular events
-:easter Fri, Eastercon
+:easter Fri 2013, Eastercon
 
 :every dec 25, Christmas Day
 :every dec 26, Boxing Day
