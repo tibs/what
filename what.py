@@ -1374,6 +1374,11 @@ def parse_event(first_lineno, first_line, more_lines, start):
                          'Unindented lines should be of the form <date>, <rest>\n'
                          '{}: {!r}'.format(first_lineno, first_lineno, first_line))
 
+    # Technically, I'd like <date> <comma> <space> <rest>, but it seems a bit
+    # overpicky to enforce that. And it's probably best just to ignore leading
+    # (and trailing) whitespace.
+    rest = rest.strip()
+
     try:
         event = parse_date(date_part, start)
     except GiveUp as e:
@@ -1593,25 +1598,33 @@ def report(args):
         # losing any comments
         for event in sorted(events):
             print(str(event))
-    else:
-        # Output the events for this timespan
-        for event in sorted(events):
-            print(repr(event))
+        return
 
-        print('==============================================================')
-        things = find_events(events, start, end, at_words)
+#       # Output the events for this timespan
+#       for event in sorted(events):
+#           print(repr(event))
 
-        prev = None
-        for date, text in sorted(things):
-            weekday = date.weekday
-            if prev and weekday < prev:
-                print('---- ---- ---- ---- ---- ---- ---- ---- ----')
-            print('{} {} {:2} {}, {}'.format(date.year,
-                MONTH_NAME[date.month], date.day, DAYS[date.weekday()], text))
-            prev = weekday
+    things = find_events(events, start, end, at_words)
 
-        print('start {} .. yesterday {} .. today {} .. end {}'.format(start,
-            yesterday, today, end))
+    prev = None
+    spacer = 4+1+3+1+2+1+3+1+1
+    for date, text in sorted(things):
+        weekday = date.weekday()
+        if prev and weekday < prev:
+            print('{}{}'.format(' '*spacer, '-'*(80-spacer)))
+        # What order do I *actually* want the date written out in?
+        # I think this is perhaps the most useful for looking at nearby
+        # dates (when the day and date are most important)
+        print('{} {:2} {} {}, {}'.format(
+            DAYS[date.weekday()],
+            date.day,
+            MONTH_NAME[date.month],
+            date.year,
+            text))
+        prev = weekday
+
+    print('\nstart {} .. yesterday {} .. today {} .. end {}'.format(start,
+        yesterday, today, end))
 
 if __name__ == '__main__':
     args = sys.argv[1:]
