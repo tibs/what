@@ -546,7 +546,7 @@ class Event(object):
             else:
                 return False
 
-    def get_dates(self, start, end, at_names=None):
+    def get_dates(self, start, end, at_words=None):
         """Given a start and end date, return those on which we occur.
 
         Returns a list of tuples of the form (date, text). This will be
@@ -1021,7 +1021,7 @@ def colon_event_weekmagic(colon_word, words, start):
     event.colon_date = colon_what(colon_word, words)
     return event
 
-def colon_condition_except(colon_word, event, words):
+def colon_condition_except(colon_word, event, words, start):
     """An exception condition.
 
     Applies to the preceding date line
@@ -1036,7 +1036,7 @@ def colon_condition_except(colon_word, event, words):
     date = eventlet.date
     event.not_on.add((date, rest))
 
-def colon_condition_until(colon_word, event, words):
+def colon_condition_until(colon_word, event, words, start):
     """An ending condition.
 
     <something> is <year> <month-name> <day>, and signifies the last date
@@ -1059,7 +1059,7 @@ def colon_condition_until(colon_word, event, words):
     elif event.repeat_until > date: # This new date is earlier, so use it
         event.repeat_until = date
 
-def colon_condition_weekly(colon_word, event, words):
+def colon_condition_weekly(colon_word, event, words, start):
     """Repeating weekly.
 
     'words' should be empty.
@@ -1071,7 +1071,7 @@ def colon_condition_weekly(colon_word, event, words):
             colon_what(colon_word, words)))
     event.repeat_every_N_days.add(7)
 
-def colon_condition_fortnightly(colon_word, event, words):
+def colon_condition_fortnightly(colon_word, event, words, start):
     """Repeating fortnightly
 
     'words' should be empty.
@@ -1083,7 +1083,7 @@ def colon_condition_fortnightly(colon_word, event, words):
             colon_what(colon_word, words)))
     event.repeat_every_N_days.add(14)
 
-def colon_condition_monthly(colon_word, event, words):
+def colon_condition_monthly(colon_word, event, words, start):
     """Repeating monthly
 
     'words' should be empty.
@@ -1093,7 +1093,7 @@ def colon_condition_monthly(colon_word, event, words):
     # Which is just the same as repeating on the same day each month
     event.repeat_on_Nth_of_month.add(event.date.day)
 
-def colon_condition_every(colon_word, event, words):
+def colon_condition_every(colon_word, event, words, start):
     """Repeat every <something> days
 
     As in ":every 5 days"
@@ -1112,7 +1112,7 @@ def colon_condition_every(colon_word, event, words):
                      'not {!r}'.format(colon_what(colon_word, words)))
     event.repeat_every_N_days.add(every)
 
-def colon_condition_for(colon_word, event, words):
+def colon_condition_for(colon_word, event, words, start):
     """Repeat for <count> days or weekdays
 
     As in ":for 5 days" or ":for 10 weekdays"
@@ -1342,7 +1342,7 @@ def parse_event(first_lineno, first_line, more_lines, start):
             colon_word = words[0].lower()
             try:
                 fn = colon_condition_methods[colon_word]
-                fn(colon_word, event, words[1:])
+                fn(colon_word, event, words[1:], start)
             except KeyError:
                 raise GiveUp('Error in line {}\n'
                              'Unexpected ":" word as <condition>, {!r}\n{}: {!r}'.format(
@@ -1429,19 +1429,19 @@ def parse_lines(lines, start):
         events.add(event)
     return events
 
-def parse_file(self, filename):
+def parse_file(filename, start):
     """Report on the information in the named file.
     """
     with open(filename) as fd:
-        events = parse_lines(fd)
+        events = parse_lines(fd, start)
     return events
 
-def find_events(events, start, end, at_names=None):
+def find_events(events, start, end, at_words=None):
     """Return a set of (date, text) tuples for the events in our date range.
     """
     things = set()
     for event in events:
-        things.update(event.get_dates(start, end, at_names))
+        things.update(event.get_dates(start, end, at_words))
 
     return things
 
@@ -1475,7 +1475,7 @@ def determine_dates(start=None, today=None, end=None):
         raise GiveUp('Start date {} is after end date {}'.format(
             start.isoformat(), end.isoformat()))
 
-    return start, end, today
+    return start, yesterday, today, end
 
 def report(args):
 
@@ -1502,6 +1502,8 @@ def report(args):
             return
         elif word == '-tidy':
             action = 'tidy'
+            # Use a very historical start date to try to sort the output nicely
+            start = datetime.date(1900, 1, 1)
         elif word == '-for':
             # Take a date and report as if today were that date
             # Format of date should be as in the file, <year> <month> <day>
@@ -1548,7 +1550,7 @@ def report(args):
             print(repr(event))
 
         print('==============================================================')
-        things = find_events(events, start, end, at_names)
+        things = find_events(events, start, end, at_words)
 
         for date, text in sorted(things):
             print('{} {} {:2} {}, {}'.format(date.year,
