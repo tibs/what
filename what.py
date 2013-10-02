@@ -280,18 +280,18 @@ def parse_year_month_day(text):
     If a <day-name> is given, it must agree with the date otherwise specified
     (and for a yearly event, with the original date)
 
-    Returns a tuple of the form (datetime.date, day-name, yearly)
+    Returns a tuple of the form (datetime.date, yearly)
 
     For instance:
 
         >>> parse_year_month_day('2013 Sep 14')
-        (datetime.date(2013, 9, 14), 'Sat', False)
+        (datetime.date(2013, 9, 14), False)
         >>> parse_year_month_day('2013* Sep 14')
-        (datetime.date(2013, 9, 14), 'Sat', True)
+        (datetime.date(2013, 9, 14), True)
         >>> parse_year_month_day('2013 Sep 14 Sat')
-        (datetime.date(2013, 9, 14), 'Sat', False)
+        (datetime.date(2013, 9, 14), False)
         >>> parse_year_month_day('2013* Sep 14 Sat')
-        (datetime.date(2013, 9, 14), 'Sat', True)
+        (datetime.date(2013, 9, 14), True)
 
         >>> parse_year_month_day('Fred')
         Traceback (most recent call last):
@@ -370,10 +370,8 @@ def parse_year_month_day(text):
 
     if day_name:
         validate_day_name(date, day_name)
-    else:
-        day_name = DAYS[date.weekday()]
 
-    return date, day_name, yearly
+    return date, yearly
 
 @total_ordering
 class Event(object):
@@ -548,7 +546,7 @@ class Event(object):
             else:
                 return False
 
-    def get_dates(self, start, end):
+    def get_dates(self, start, end, at_names=None):
         """Given a start and end date, return those on which we occur.
 
         Returns a list of tuples of the form (date, text). This will be
@@ -621,892 +619,863 @@ def colon_what(colon_word, words):
     else:
         return colon_word
 
-class What(object):
-    """Report on events over a range of time.
+def colon_event_every(colon_word, words, start):
+    """Every <something>
 
-    As it is now used, does What merit being a class?
+    <something> can be:
+
+        * <day-name> -- every <day-name> in each week, ":every Mon"
+        * <month-name> <day> -- every equivalent date, ":every Dec 25"
+        * day <day> -- every <date> in each month, ":every day 8"
+
+    Returns an appropriate Event.
     """
-
-    def __init__(self, today=None, start=None, end=None, at_words=None):
-        """Set up the range of dates we are interested in, and define 'today'
-
-        * 'today' is the date to regard as this day - the default is today.
-        * 'start' is the date to start reporting on - it defaults to the
-          day before 'today'
-        * 'end' is the date to stop reporting on - it defaults to four weeks
-          after 'today'
-        * 'at_words' may be a set of @<word> values.
-
-        All three should be datetime.date instances.
-
-        For instance:
-
-            >>> w = What(today=datetime.date(2013, 9, 14))
-            >>> w.today
-            datetime.date(2013, 9, 14)
-            >>> w.start
-            datetime.date(2013, 9, 13)
-            >>> w.end
-            datetime.date(2013, 10, 12)
-
-        but:
-
-            >>> w = What(today=datetime.date(2013, 9, 14),
-            ...          start=datetime.date(2013, 9, 15))
-            Traceback (most recent call last):
-            ...
-            GiveUp: Start date 2013-09-15 is after "today" 2013-09-14
-
-        and so on.
-        """
-        if today is None:
-            today = datetime.date.today()
-
-        if start is None:
-            # Use "yesterday"
-            start = datetime.date.fromordinal(today.toordinal() - 1)
-
-        if end is None:
-            # Add four weeks
-            end = datetime.date.fromordinal(today.toordinal() + 4*7)
-
-        if start > today:
-            raise GiveUp('Start date {} is after "today" {}'.format(
-                start.isoformat(), today.isoformat()))
-
-        if end < today:
-            raise GiveUp('End date {} is before "today" {}'.format(
-                end.isoformat(), today.isoformat()))
-
-        if start > end:
-            raise GiveUp('Start date {} is after end date {}'.format(
-                start.isoformat(), end.isoformat()))
-
-        if at_words is None:
-            at_words = set()
-
-        self.today = today
-        self.start = start
-        self.end = end
-        self.at_words = at_words
-
-        self.yesterday = self.today - datetime.timedelta(days=1)
-
-        self.colon_event_methods = {':every': self.colon_event_every,
-                                    ':first': self.colon_event_first,
-                                    ':second': self.colon_event_second,
-                                    ':third': self.colon_event_third,
-                                    ':fourth': self.colon_event_fourth,
-                                    ':fifth': self.colon_event_fifth,
-                                    ':last': self.colon_event_last,
-                                    ':lastbutone': self.colon_event_lastbutone,
-                                    ':easter': self.colon_event_easter,
-                                    ':weekend': self.colon_event_weekmagic,
-                                    ':weekday': self.colon_event_weekmagic,
-                                    ':mon': self.colon_event_weekmagic,
-                                    ':tue': self.colon_event_weekmagic,
-                                    ':wed': self.colon_event_weekmagic,
-                                    ':thu': self.colon_event_weekmagic,
-                                    ':fri': self.colon_event_weekmagic,
-                                    ':sat': self.colon_event_weekmagic,
-                                    ':sun': self.colon_event_weekmagic,
-                                   }
-
-        self.colon_condition_methods = {':except': self.colon_condition_except,
-                                        ':until': self.colon_condition_until,
-                                        ':weekly': self.colon_condition_weekly,
-                                        ':fortnightly': self.colon_condition_fortnightly,
-                                        ':monthly': self.colon_condition_monthly,
-                                        ':every': self.colon_condition_every,
-                                        ':for': self.colon_condition_for,
-                                       }
-
-    def colon_event_every(self, colon_word, words):
-        """Every <something>
-
-        <something> can be:
-
-            * <day-name> -- every <day-name> in each week, ":every Mon"
-            * <month-name> <day> -- every equivalent date, ":every Dec 25"
-            * day <day> -- every <date> in each month, ":every day 8"
-
-        Returns an appropriate Event.
-        """
-        start = self.start
-        if len(words) == 1:
-            # :every <day-name>
-            day_name = words[0].capitalize()
-            if day_name not in DAYS:
-                raise GiveUp('Expected a day name (Mon..Fri), not {}\n'
-                             'in {!r}'.format(day_name, colon_what(colon_word, words)))
-            # Work relative to the *start* date
-            date = day_after_date(start, day_name, True)
-            event = Event(date)
-            event.repeat_every_N_days.add(7)
-            # We could arguably have asked to repeat on every <day-name>
-            # explicitly, but since we're creating a new Event, we might
-            # as well just leverage the 7 day repeat
-
-            event.colon_date = colon_what(colon_word, words)
-            return event
-
-        if len(words) != 2:
-            raise GiveUp('Expected one of:\n'
-                         '  :every <day-name>\n'
-                         '  :every <month-name> <day>\n'
-                         '  :every day <day>\n'
-                         'not {!r}'.format(colon_what(colon_word, words)))
-
-        if words[0] == 'day':
-            # :every day <day>
-            try:
-                day = int(words[1])
-            except ValueError:
-                raise GiveUp('Expected:\n'
-                             '  :every day <day>\n'
-                             'not {!r}'.format(colon_what(colon_word, words)))
-
-            # If the day is 29..31, it is possible it might not be in *this*
-            # month. Luckily, if that's so, we know that next month is always
-            # a month with 31 days...
-            try:
-                date = start.replace(day=day)
-            except ValueError:
-                date = start.replace(day=day, month=start.month+1)
-            event = Event(date)
-            event.repeat_on_Nth_of_month.add(day)
-
-        elif words[0].capitalize() in MONTH_NUMBER:
-            # :every <month-name> <day>
-            try:
-                day = int(words[1])
-            except ValueError:
-                raise GiveUp('Expected:\n'
-                             '  :every {} <day>\n'
-                             'not {!r}'.format(words[0], colon_what(colon_word, words)))
-            month = MONTH_NUMBER[words[0].capitalize()]
-            # If they ask for Feb 29 in a year that doesn't have it, we'll
-            # have to choose the year after...
-            try:
-                date = start.replace(day=day, month=month)
-            except ValueError:
-                date = datetime.date(day=day, month=month, year=start.year+1)
-            event = Event(date)
-            event.repeat_yearly = True
-
-        else:
-            raise GiveUp('Expected one of:\n'
-                         '  :every <day-name>\n'
-                         '  :every <month-name> <day>\n'
-                         '  :every day <day>\n'
-                         'not {!r}'.format(colon_what(colon_word, words)))
-
-        event.colon_date = colon_what(colon_word, words)
-        return event
-
-    def colon_event_first(self, colon_word, words):
-        """The first <something>
-
-        <something> can be:
-
-            * <day-name> -- the first day of that name in a month, ":first Mon"
-        """
-        if len(words) != 1:
-            raise GiveUp('Expected a day name, in {}'.format(
-                colon_what(colon_word, words)))
-        elif words[0].capitalize() not in DAYS:
-            raise GiveUp('Expected a day name, not {!r}. in {}'.format(
-                words[0], colon_what(colon_word, words)))
-
+    if len(words) == 1:
+        # :every <day-name>
         day_name = words[0].capitalize()
-        first_day_of_month = self.start.replace(day=1)
-        date = day_after_date(first_day_of_month, day_name, True)
+        if day_name not in DAYS:
+            raise GiveUp('Expected a day name (Mon..Fri), not {}\n'
+                         'in {!r}'.format(day_name, colon_what(colon_word, words)))
+        # Work relative to the *start* date
+        date = day_after_date(start, day_name, True)
         event = Event(date)
-        event.repeat_ordinal.add((1, day_name))
+        event.repeat_every_N_days.add(7)
+        # We could arguably have asked to repeat on every <day-name>
+        # explicitly, but since we're creating a new Event, we might
+        # as well just leverage the 7 day repeat
+
         event.colon_date = colon_what(colon_word, words)
         return event
 
-    def colon_event_second(self, colon_word, words):
-        """The second <something>
+    if len(words) != 2:
+        raise GiveUp('Expected one of:\n'
+                     '  :every <day-name>\n'
+                     '  :every <month-name> <day>\n'
+                     '  :every day <day>\n'
+                     'not {!r}'.format(colon_what(colon_word, words)))
 
-        <something> can be:
-
-            * <day-name> -- the second day of that name in a month
-        """
-        if len(words) != 1:
-            raise GiveUp('Expected a day name, in {}'.format(
-                colon_what(colon_word, words)))
-        elif words[0].capitalize() not in DAYS:
-            raise GiveUp('Expected a day name, not {!r}. in {}'.format(
-                words[0], colon_what(colon_word, words)))
-
-        day_name = words[0].capitalize()
-        a_week_after_start = self.start.replace(day=1+7)
-        date = day_after_date(a_week_after_start, day_name, True)
-        event = Event(date)
-        event.repeat_ordinal.add((2, day_name))
-        event.colon_date = colon_what(colon_word, words)
-        return event
-
-    def colon_event_third(self, colon_word, words):
-        """The third <something>
-
-        <something> can be:
-
-            * <day-name> -- the third day of that name in a month
-        """
-        if len(words) != 1:
-            raise GiveUp('Expected a day name, in {}'.format(
-                colon_what(colon_word, words)))
-        elif words[0].capitalize() not in DAYS:
-            raise GiveUp('Expected a day name, not {!r}. in {}'.format(
-                words[0], colon_what(colon_word, words)))
-
-        day_name = words[0].capitalize()
-        two_weeks_after_start = self.start.replace(day=1+7+7)
-        date = day_after_date(two_weeks_after_start, day_name, True)
-        event = Event(date)
-        event.repeat_ordinal.add((3, day_name))
-        event.colon_date = colon_what(colon_word, words)
-        return event
-
-    def colon_event_fourth(self, colon_word, words):
-        """The fourth <something>
-
-        <something> can be:
-
-            * <day-name> -- the fourth day of that name in a month
-        """
-        if len(words) != 1:
-            raise GiveUp('Expected a day name, in {}'.format(
-                colon_what(colon_word, words)))
-        elif words[0].capitalize() not in DAYS:
-            raise GiveUp('Expected a day name, not {!r}. in {}'.format(
-                words[0], colon_what(colon_word, words)))
-
-        day_name = words[0].capitalize()
-        three_weeks_after_start = self.start.replace(day=1+7+7+7)
-        date = day_after_date(three_weeks_after_start, day_name, True)
-        event = Event(date)
-        event.repeat_ordinal.add((4, day_name))
-        event.colon_date = colon_what(colon_word, words)
-        return event
-
-    def colon_event_fifth(self, colon_word, words):
-        """The fifth <something> (maybe this will be useful sometime)
-
-        <something> can be:
-
-            * <day-name> -- the fifth day of that name in a month
-        """
-        if len(words) != 1:
-            raise GiveUp('Expected a day name, in {}'.format(
-                colon_what(colon_word, words)))
-        elif words[0].capitalize() not in DAYS:
-            raise GiveUp('Expected a day name, not {!r}. in {}'.format(
-                words[0], colon_what(colon_word, words)))
-
-        day_name = words[0].capitalize()
-        four_weeks_after_start = self.start.replace(day=1+7+7+7+7)
-        date = day_after_date(four_weeks_after_start, day_name, True)
-        event = Event(date)
-        event.repeat_ordinal.add((5, day_name))
-        event.colon_date = colon_what(colon_word, words)
-        return event
-
-    def colon_event_last(self, colon_word, words):
-        """The last <something>
-
-        <something> can be:
-
-            * <day-name> -- the last day of that name in a month, "last Mon"
-        """
-        if len(words) != 1:
-            raise GiveUp('Expected a day name, in {}'.format(
-                colon_what(colon_word, words)))
-        elif words[0].capitalize() not in DAYS:
-            raise GiveUp('Expected a day name, not {!r}. in {}'.format(
-                words[0], colon_what(colon_word, words)))
-
-        day_name = words[0].capitalize()
-
-        first_weekday, month_len = calendar.monthrange(self.start.year, self.start.month)
-        last_day_of_month = self.start.replace(day=month_len)
-        date = day_before_date(last_day_of_month, day_name, True)
-        event = Event(date)
-        event.repeat_ordinal.add((-1, day_name))
-        event.colon_date = colon_what(colon_word, words)
-        return event
-
-    def colon_event_lastbutone(self, colon_word, words):
-        """The last but one (penultimate) <something>
-
-        <something> can be:
-
-            * <day-name> -- the last but one day of that name in a month
-        """
-        if len(words) != 1:
-            raise GiveUp('Expected a day name, in {}'.format(
-                colon_what(colon_word, words)))
-        elif words[0].capitalize() not in DAYS:
-            raise GiveUp('Expected a day name, not {!r}. in {}'.format(
-                words[0], colon_what(colon_word, words)))
-
-        day_name = words[0].capitalize()
-
-        first_weekday, month_len = calendar.monthrange(self.start.year, self.start.month)
-        a_week_before_end = self.start.replace(day=month_len-7)
-        date = day_before_date(a_week_before_end, day_name, True)
-        event = Event(date)
-        event.repeat_ordinal.add((-1, day_name))
-        event.colon_date = colon_what(colon_word, words)
-        return event
-
-    def colon_event_easter(self, colon_word, words):
-        """A date related to Easter
-
-        <something> can be 'Fri', 'Sat', 'Sun', 'Mon'. Alternatively, it can be
-        a positive or negative number, for days relative to Easter Sunday - thus
-        colon_event_easter(-1) is the same a colon_event_easter('Sat') -
-        followed by a year.
-
-        For instance, ":easter Fri 2013" or ":easter -10 1990"
-        """
-        if len(words) != 2:
-            raise GiveUp('Expected one of:\n'
-                         '  :easter Fri|Sat|Sun|Mon <year>\n'
-                         '  :easter <offset> <year>\n'
-                         'not {!r}'.format(colon_what(colon_word, words)))
-        when = words[0].capitalize()
-        if when == 'Fri':
-            offset = -2
-        elif when == 'Sat':
-            offset = -1
-        elif when == 'Sun':
-            offset = 0
-        elif when == 'Mon':
-            offset = 1
-        else:
-            try:
-                offset = int(when)
-            except ValueError as e:
-                raise GiveUp('Expected one of:\n'
-                             '  :easter Fri|Sat|Sun|Mon <year>\n'
-                             '  :easter <offset> <year>\n'
-                             'not {!r}\n'
-                             'Error reading <offset>, {}'.format(colon_what(colon_word, words), e))
-
+    if words[0] == 'day':
+        # :every day <day>
         try:
-            year = int(words[1])
+            day = int(words[1])
+        except ValueError:
+            raise GiveUp('Expected:\n'
+                         '  :every day <day>\n'
+                         'not {!r}'.format(colon_what(colon_word, words)))
+
+        # If the day is 29..31, it is possible it might not be in *this*
+        # month. Luckily, if that's so, we know that next month is always
+        # a month with 31 days...
+        try:
+            date = start.replace(day=day)
+        except ValueError:
+            date = start.replace(day=day, month=start.month+1)
+        event = Event(date)
+        event.repeat_on_Nth_of_month.add(day)
+
+    elif words[0].capitalize() in MONTH_NUMBER:
+        # :every <month-name> <day>
+        try:
+            day = int(words[1])
+        except ValueError:
+            raise GiveUp('Expected:\n'
+                         '  :every {} <day>\n'
+                         'not {!r}'.format(words[0], colon_what(colon_word, words)))
+        month = MONTH_NUMBER[words[0].capitalize()]
+        # If they ask for Feb 29 in a year that doesn't have it, we'll
+        # have to choose the year after...
+        try:
+            date = start.replace(day=day, month=month)
+        except ValueError:
+            date = datetime.date(day=day, month=month, year=start.year+1)
+        event = Event(date)
+        event.repeat_yearly = True
+
+    else:
+        raise GiveUp('Expected one of:\n'
+                     '  :every <day-name>\n'
+                     '  :every <month-name> <day>\n'
+                     '  :every day <day>\n'
+                     'not {!r}'.format(colon_what(colon_word, words)))
+
+    event.colon_date = colon_what(colon_word, words)
+    return event
+
+def colon_event_first(colon_word, words, start):
+    """The first <something>
+
+    <something> can be:
+
+        * <day-name> -- the first day of that name in a month, ":first Mon"
+    """
+    if len(words) != 1:
+        raise GiveUp('Expected a day name, in {}'.format(
+            colon_what(colon_word, words)))
+    elif words[0].capitalize() not in DAYS:
+        raise GiveUp('Expected a day name, not {!r}. in {}'.format(
+            words[0], colon_what(colon_word, words)))
+
+    day_name = words[0].capitalize()
+    first_day_of_month = start.replace(day=1)
+    date = day_after_date(first_day_of_month, day_name, True)
+    event = Event(date)
+    event.repeat_ordinal.add((1, day_name))
+    event.colon_date = colon_what(colon_word, words)
+    return event
+
+def colon_event_second(colon_word, words, start):
+    """The second <something>
+
+    <something> can be:
+
+        * <day-name> -- the second day of that name in a month
+    """
+    if len(words) != 1:
+        raise GiveUp('Expected a day name, in {}'.format(
+            colon_what(colon_word, words)))
+    elif words[0].capitalize() not in DAYS:
+        raise GiveUp('Expected a day name, not {!r}. in {}'.format(
+            words[0], colon_what(colon_word, words)))
+
+    day_name = words[0].capitalize()
+    a_week_after_start = start.replace(day=1+7)
+    date = day_after_date(a_week_after_start, day_name, True)
+    event = Event(date)
+    event.repeat_ordinal.add((2, day_name))
+    event.colon_date = colon_what(colon_word, words)
+    return event
+
+def colon_event_third(colon_word, words, start):
+    """The third <something>
+
+    <something> can be:
+
+        * <day-name> -- the third day of that name in a month
+    """
+    if len(words) != 1:
+        raise GiveUp('Expected a day name, in {}'.format(
+            colon_what(colon_word, words)))
+    elif words[0].capitalize() not in DAYS:
+        raise GiveUp('Expected a day name, not {!r}. in {}'.format(
+            words[0], colon_what(colon_word, words)))
+
+    day_name = words[0].capitalize()
+    two_weeks_after_start = start.replace(day=1+7+7)
+    date = day_after_date(two_weeks_after_start, day_name, True)
+    event = Event(date)
+    event.repeat_ordinal.add((3, day_name))
+    event.colon_date = colon_what(colon_word, words)
+    return event
+
+def colon_event_fourth(colon_word, words, start):
+    """The fourth <something>
+
+    <something> can be:
+
+        * <day-name> -- the fourth day of that name in a month
+    """
+    if len(words) != 1:
+        raise GiveUp('Expected a day name, in {}'.format(
+            colon_what(colon_word, words)))
+    elif words[0].capitalize() not in DAYS:
+        raise GiveUp('Expected a day name, not {!r}. in {}'.format(
+            words[0], colon_what(colon_word, words)))
+
+    day_name = words[0].capitalize()
+    three_weeks_after_start = start.replace(day=1+7+7+7)
+    date = day_after_date(three_weeks_after_start, day_name, True)
+    event = Event(date)
+    event.repeat_ordinal.add((4, day_name))
+    event.colon_date = colon_what(colon_word, words)
+    return event
+
+def colon_event_fifth(colon_word, words, start):
+    """The fifth <something> (maybe this will be useful sometime)
+
+    <something> can be:
+
+        * <day-name> -- the fifth day of that name in a month
+    """
+    if len(words) != 1:
+        raise GiveUp('Expected a day name, in {}'.format(
+            colon_what(colon_word, words)))
+    elif words[0].capitalize() not in DAYS:
+        raise GiveUp('Expected a day name, not {!r}. in {}'.format(
+            words[0], colon_what(colon_word, words)))
+
+    day_name = words[0].capitalize()
+    four_weeks_after_start = start.replace(day=1+7+7+7+7)
+    date = day_after_date(four_weeks_after_start, day_name, True)
+    event = Event(date)
+    event.repeat_ordinal.add((5, day_name))
+    event.colon_date = colon_what(colon_word, words)
+    return event
+
+def colon_event_last(colon_word, words, start):
+    """The last <something>
+
+    <something> can be:
+
+        * <day-name> -- the last day of that name in a month, "last Mon"
+    """
+    if len(words) != 1:
+        raise GiveUp('Expected a day name, in {}'.format(
+            colon_what(colon_word, words)))
+    elif words[0].capitalize() not in DAYS:
+        raise GiveUp('Expected a day name, not {!r}. in {}'.format(
+            words[0], colon_what(colon_word, words)))
+
+    day_name = words[0].capitalize()
+
+    first_weekday, month_len = calendar.monthrange(start.year, start.month)
+    last_day_of_month = start.replace(day=month_len)
+    date = day_before_date(last_day_of_month, day_name, True)
+    event = Event(date)
+    event.repeat_ordinal.add((-1, day_name))
+    event.colon_date = colon_what(colon_word, words)
+    return event
+
+def colon_event_lastbutone(colon_word, words, start):
+    """The last but one (penultimate) <something>
+
+    <something> can be:
+
+        * <day-name> -- the last but one day of that name in a month
+    """
+    if len(words) != 1:
+        raise GiveUp('Expected a day name, in {}'.format(
+            colon_what(colon_word, words)))
+    elif words[0].capitalize() not in DAYS:
+        raise GiveUp('Expected a day name, not {!r}. in {}'.format(
+            words[0], colon_what(colon_word, words)))
+
+    day_name = words[0].capitalize()
+
+    first_weekday, month_len = calendar.monthrange(start.year, start.month)
+    a_week_before_end = start.replace(day=month_len-7)
+    date = day_before_date(a_week_before_end, day_name, True)
+    event = Event(date)
+    event.repeat_ordinal.add((-1, day_name))
+    event.colon_date = colon_what(colon_word, words)
+    return event
+
+def colon_event_easter(colon_word, words, start):
+    """A date related to Easter
+
+    <something> can be 'Fri', 'Sat', 'Sun', 'Mon'. Alternatively, it can be
+    a positive or negative number, for days relative to Easter Sunday - thus
+    colon_event_easter(-1) is the same a colon_event_easter('Sat') -
+    followed by a year.
+
+    For instance, ":easter Fri 2013" or ":easter -10 1990"
+    """
+    if len(words) != 2:
+        raise GiveUp('Expected one of:\n'
+                     '  :easter Fri|Sat|Sun|Mon <year>\n'
+                     '  :easter <offset> <year>\n'
+                     'not {!r}'.format(colon_what(colon_word, words)))
+    when = words[0].capitalize()
+    if when == 'Fri':
+        offset = -2
+    elif when == 'Sat':
+        offset = -1
+    elif when == 'Sun':
+        offset = 0
+    elif when == 'Mon':
+        offset = 1
+    else:
+        try:
+            offset = int(when)
         except ValueError as e:
             raise GiveUp('Expected one of:\n'
                          '  :easter Fri|Sat|Sun|Mon <year>\n'
                          '  :easter <offset> <year>\n'
                          'not {!r}\n'
-                         'Error reading <year>, {}'.format(colon_what(colon_word, words), e))
+                         'Error reading <offset>, {}'.format(colon_what(colon_word, words), e))
 
-        easter = calc_easter(year)
-        date = easter + datetime.timedelta(days=offset)
+    try:
+        year = int(words[1])
+    except ValueError as e:
+        raise GiveUp('Expected one of:\n'
+                     '  :easter Fri|Sat|Sun|Mon <year>\n'
+                     '  :easter <offset> <year>\n'
+                     'not {!r}\n'
+                     'Error reading <year>, {}'.format(colon_what(colon_word, words), e))
 
-        event = Event(date)
-        event.colon_date = colon_what(colon_word, words)
-        return event
+    easter = calc_easter(year)
+    date = easter + datetime.timedelta(days=offset)
 
-    def colon_event_weekmagic(self, colon_word, words):
-        """A day relative to a date
+    event = Event(date)
+    event.colon_date = colon_what(colon_word, words)
+    return event
 
-        * <something> 'after' <year> <month-name> <day> [<day-name>]
-        * <something> 'before' <year> <month-name> <day> [<day-name>]
-        * <something> 'on-or-after' <year> <month-name> <day> [<day-name>]
-        * <something> 'on-or-before' <year> <month-name> <day> [<day-name>]
+def colon_event_weekmagic(colon_word, words, start):
+    """A day relative to a date
 
-        where <something> is a day name, or 'weekday', or 'weekend'
-        """
-        try:
-            day_name = colon_word[1:]
-            when = words[0]
-            date_part = ' '.join(words[1:])
-        except IndexError:
-            raise GiveUp('Expected one of:\n'
-                         '  :<something> before <year> <mon> <day> [<nam>]\n'
-                         '  :<something> after <year> <mon> <day> [<nam>]\n'
-                         'not {!r}'.format(colon_what(colon_word, words)))
+    * <something> 'after' <year> <month-name> <day> [<day-name>]
+    * <something> 'before' <year> <month-name> <day> [<day-name>]
+    * <something> 'on-or-after' <year> <month-name> <day> [<day-name>]
+    * <something> 'on-or-before' <year> <month-name> <day> [<day-name>]
 
-        if day_name.capitalize() in DAYS:
-            day_name = day_name.capitalize()
-        elif day_name not in ('weekend', 'weekday'):
-            raise GiveUp('Unexpected {!r}, expected one of:\n'
-                         '  :<something> before <year> <mon> <day> [<nam>]\n'
-                         '  :<something> after <year> <mon> <day> [<nam>]\n'
-                         'where <something> is Mon..Sun or weekday or weekend\n'
-                         'not {!r}'.format(day_name, colon_what(colon_word, words)))
+    where <something> is a day name, or 'weekday', or 'weekend'
+    """
+    try:
+        day_name = colon_word[1:]
+        when = words[0]
+        date_part = ' '.join(words[1:])
+    except IndexError:
+        raise GiveUp('Expected one of:\n'
+                     '  :<something> before <year> <mon> <day> [<nam>]\n'
+                     '  :<something> after <year> <mon> <day> [<nam>]\n'
+                     'not {!r}'.format(colon_what(colon_word, words)))
 
-        eventlet = self.parse_date(date_part,
-                                  'it does not make sense inside {}'.format(
-                                   colon_what(colon_word, words)))
-        date = eventlet.date
+    if day_name.capitalize() in DAYS:
+        day_name = day_name.capitalize()
+    elif day_name not in ('weekend', 'weekday'):
+        raise GiveUp('Unexpected {!r}, expected one of:\n'
+                     '  :<something> before <year> <mon> <day> [<nam>]\n'
+                     '  :<something> after <year> <mon> <day> [<nam>]\n'
+                     'where <something> is Mon..Sun or weekday or weekend\n'
+                     'not {!r}'.format(day_name, colon_what(colon_word, words)))
 
-        if when not in ('before', 'after', 'on-or-before', 'on-or-after'):
-            raise GiveUp('Unexpected {!r}, expected one of:\n'
-                         '  :<something> [on-or-]before <year> <mon> <day> [<nam>]\n'
-                         '  :<something> [on-or-]after <year> <mon> <day> [<nam>]\n'
-                         'not {!r}'.format(when, colon_what(colon_word, words)))
+    eventlet = parse_date(date_part, start,
+                          'it does not make sense inside {}'.format(
+                           colon_what(colon_word, words)))
+    date = eventlet.date
 
-        if day_name == 'weekend':
-            if when == 'after':
-                todays_day = DAYS[self.today.weekday()]
-                if todays_day == 'Sat':
-                    day_name = 'Sun'
-                elif todays_day == 'Sun':
-                    day_name = 'Sat'    # the next Saturday...
-                else:
-                    day_name = 'Sat'
-            elif when == 'on-or-after':
-                todays_day = DAYS[self.today.weekday()]
-                if todays_day == 'Sat':
-                    day_name = 'Sat'
-                elif todays_day == 'Sun':
-                    day_name = 'Sun'    # the same day
-                else:
-                    day_name = 'Sat'
-            elif when == 'before':
-                todays_day = DAYS[self.today.weekday()]
-                if todays_day == 'Sat':
-                    day_name = 'Sun'    # the previous Sunday...
-                elif todays_day == 'Sun':
-                    day_name = 'Sat'
-                else:
-                    day_name = 'Sun'
-            elif when == 'on-or-before':
-                todays_day = DAYS[self.today.weekday()]
-                if todays_day == 'Sat':
-                    day_name = 'Sat'    # the same day
-                elif todays_day == 'Sun':
-                    day_name = 'Sun'
-                else:
-                    day_name = 'Sun'
-        elif day_name == 'weekday':
-            if when == 'after':
-                todays_day = DAYS[self.today.weekday()]
-                if todays_day in ('Fri', 'Sat', 'Sun'):
-                    day_name = 'Mon'
-                else:   # we know DAYS starts with Mon
-                    day_name = DAYS[self.today.weekday()+1]
-            elif when == 'on-or-after':
-                todays_day = DAYS[self.today.weekday()]
-                if todays_day in ('Sat', 'Sun'):
-                    day_name = 'Mon'
-                else:
-                    day_name = todays_day
-            elif when == 'before':
-                todays_day = DAYS[self.today.weekday()]
-                if todays_day in ('Sat', 'Sun', 'Mon'):
-                    day_name = 'Fri'
-                else:   # we know DAYS starts with Mon, but we already dealt with that
-                    day_name = DAYS[self.today.weekday()-1]
-            elif when == 'on-or-before':
-                todays_day = DAYS[self.today.weekday()]
-                if todays_day in ('Sat', 'Sun'):
-                    day_name = 'Fri'
-                else:
-                    day_name = todays_day
+    if when not in ('before', 'after', 'on-or-before', 'on-or-after'):
+        raise GiveUp('Unexpected {!r}, expected one of:\n'
+                     '  :<something> [on-or-]before <year> <mon> <day> [<nam>]\n'
+                     '  :<something> [on-or-]after <year> <mon> <day> [<nam>]\n'
+                     'not {!r}'.format(when, colon_what(colon_word, words)))
 
+    if day_name == 'weekend':
         if when == 'after':
-            date = day_after_date(date, day_name)
-        elif when == 'on-or-after':
-            date = day_after_date(date, day_name, True)
-        elif when == 'before':
-            date = day_before_date(date, day_name)
-        else:
-            date = day_before_date(date, day_name, True)
-
-        event = Event(date)
-        event.colon_date = colon_what(colon_word, words)
-        return event
-
-    def colon_condition_except(self, colon_word, event, words):
-        """An exception condition.
-
-        Applies to the preceding date line
-        """
-        text = ' '.join(words)
-        parts = text.split(',')
-        date_part = parts[0]
-        rest = ','.join(parts[1:])
-        eventlet = self.parse_date(date_part,
-                                  'it does not make sense inside {}'.format(
-                                   colon_what(colon_word, words)))
-        date = eventlet.date
-        event.not_on.add((date, rest))
-
-    def colon_condition_until(self, colon_word, event, words):
-        """An ending condition.
-
-        <something> is <year> <month-name> <day>, and signifies the last date
-        for a repetitive event. If the date does not exactly match the
-        recurring event's date, then the last event is the one before this
-        date.
-
-        Applies to the preceding date line
-        """
-        eventlet = self.parse_date(' '.join(words),
-                                  'it does not make sense inside {}'.format(
-                                   colon_what(colon_word, words)))
-        date = eventlet.date
-        if date < event.date:
-            raise GiveUp('Date in {!r} is before main date {} {} {}'.format(
-                colon_what(colon_word, words), event.date.year,
-                MONTH_NUMBER[event.date.month], event.date.day))
-        if event.repeat_until is None:
-            event.repeat_until = date
-        elif event.repeat_until > date: # This new date is earlier, so use it
-            event.repeat_until = date
-
-    def colon_condition_weekly(self, colon_word, event, words):
-        """Repeating weekly.
-
-        'words' should be empty.
-
-        Applies to the preceding date line
-        """
-        if words:
-            raise GiveUp('Not expecting text after :weekly, in {!r}'.format(
-                colon_what(colon_word, words)))
-        event.repeat_every_N_days.add(7)
-
-    def colon_condition_fortnightly(self, colon_word, event, words):
-        """Repeating fortnightly
-
-        'words' should be empty.
-
-        Applies to the preceding date line
-        """
-        if words:
-            raise GiveUp('Not expecting text after :fortnightly, in {!r}'.format(
-                colon_what(colon_word, words)))
-        event.repeat_every_N_days.add(14)
-
-    def colon_condition_monthly(self, colon_word, event, words):
-        """Repeating monthly
-
-        'words' should be empty.
-
-        Applies to the preceding date line
-        """
-        # Which is just the same as repeating on the same day each month
-        event.repeat_on_Nth_of_month.add(event.date.day)
-
-    def colon_condition_every(self, colon_word, event, words):
-        """Repeat every <something> days
-
-        As in ":every 5 days"
-
-        ":every 7 days" is thus the same as ":weekly"
-        """
-        if len(words) != 2 or words[1] != 'days':
-            raise GiveUp("Expected ':repeat <num> days'\n"
-                         'not {!r}'.format(colon_what(colon_word, words)))
-
-        try:
-            every = int(words[0])
-        except ValueError:
-            raise GiveUp('Expected:\n'
-                         '  :every <every> days\n'
-                         'not {!r}'.format(colon_what(colon_word, words)))
-        event.repeat_every_N_days.add(every)
-
-    def colon_condition_for(self, colon_word, event, words):
-        """Repeat for <count> days or weekdays
-
-        As in ":for 5 days" or ":for 10 weekdays"
-        """
-        if len(words) != 2 or words[1].lower() not in ('days', 'weekdays'):
-            raise GiveUp("Expected ':repeat <num> days'\n"
-                         'not {!r}'.format(colon_what(colon_word, words)))
-
-        what = words[1].lower()
-        try:
-            count = int(words[0])
-        except ValueError:
-            raise GiveUp('Expected:\n'
-                         '  :for <count> {}\n'
-                         'not {!r}'.format(what, colon_what(colon_word, words)))
-        if what == 'days':
-            until = event.date + datetime.timedelta(days=count)
-        else:
-            # Hah - weekdays only
-            one_day = datetime.timedelta(days=1)
-            until = event.date
-            while count > 0:
-                until = until + one_day
-                while until.weekday in (5, 6):
-                    event.not_on.add(until)
-                    until = until + one_day
-                count -= 1
-        if event.repeat_until is None:
-            event.repeat_until = until
-        elif event.repeat_until > until: # This new date is earlier, so use it
-            event.repeat_until = until
-
-    def yield_lines(self, lines):
-        """Yield interesting lines.
-
-        Returns lists of the form:
-
-            lineno, [text, ...]
-
-        Empty lines and comment lines are not returned. Indented lines have their
-        indentation removed, and are returned as the '...'.
-
-        For instance:
-
-            >>> w = What()
-            >>> lines = ['# A comment',
-            ...          'Line 2',
-            ...          'Line 3',
-            ...          '  line 3 continued',
-            ...          'Line 5',
-            ...          '  ',
-            ...          'Line 7  ',
-            ...          '  line 7 continued  ',
-            ...          '  even more line 7  ',
-            ...         ]
-            >>> for line in w.yield_lines(lines):
-            ...     print(line)
-            (2, ['Line 2'])
-            (3, ['Line 3', 'line 3 continued'])
-            (5, ['Line 5'])
-            (7, ['Line 7', 'line 7 continued', 'even more line 7'])
-
-        but:
-
-            >>> bad_lines = [' not line 1']
-            >>> for line in w.yield_lines(bad_lines):
-            ...     print(line)
-            Traceback (most recent call last):
-            ...
-            GiveUp: Line 1 is indented, but follows the start of file
-
-            >>> bad_lines = ['Line 1',
-            ...              '# a comment',
-            ...              '  not line 1',
-            ...             ]
-            >>> for line in w.yield_lines(bad_lines):
-            ...     print(line)
-            Traceback (most recent call last):
-            ...
-            GiveUp: Line 3 is indented, but follows a comment
-
-            >>> bad_lines = ['Line 1',
-            ...              '',
-            ...              '  not line 1',
-            ...             ]
-            >>> for line in w.yield_lines(bad_lines):
-            ...     print(line)
-            Traceback (most recent call last):
-            ...
-            GiveUp: Line 3 is indented, but follows an empty line
-        """
-        lineno = 0
-        last_was = 'the start of file'
-        this_start = 0
-        this_lines = []
-        for line in lines:
-            lineno += 1
-
-            # Carefully lose trailing (but not leading) whitespace
-            text = line.rstrip()
-
-            # Empty lines are ignored
-            if not text:
-                last_was = 'an empty line'
-                if this_lines:
-                    yield this_start, this_lines
-                    this_lines = []
-                continue
-
-            # Figure out if it is indented or not
-            rest = text.lstrip()
-            indented = rest != text
-            text = rest
-
-            # Any line with a hash in the first column is a comment
-            if text[0] == '#':
-                last_was = 'a comment'
-                if this_lines:
-                    yield this_start, this_lines
-                    this_lines = []
-                continue
-
-            if indented:
-                if this_lines:
-                    this_lines.append(text)
-                    last_was = 'an indented line'
-                else:
-                    raise GiveUp('Line {} is indented, but follows {}'.format(
-                        lineno, last_was))
+            todays_day = DAYS[date.weekday()]
+            if todays_day == 'Sat':
+                day_name = 'Sun'
+            elif todays_day == 'Sun':
+                day_name = 'Sat'    # the next Saturday...
             else:
-                if this_lines:
-                    yield this_start, this_lines
-                this_start = lineno
-                this_lines = [text]
-                last_was = 'a date line'
+                day_name = 'Sat'
+        elif when == 'on-or-after':
+            todays_day = DAYS[date.weekday()]
+            if todays_day == 'Sat':
+                day_name = 'Sat'
+            elif todays_day == 'Sun':
+                day_name = 'Sun'    # the same day
+            else:
+                day_name = 'Sat'
+        elif when == 'before':
+            todays_day = DAYS[date.weekday()]
+            if todays_day == 'Sat':
+                day_name = 'Sun'    # the previous Sunday...
+            elif todays_day == 'Sun':
+                day_name = 'Sat'
+            else:
+                day_name = 'Sun'
+        elif when == 'on-or-before':
+            todays_day = DAYS[date.weekday()]
+            if todays_day == 'Sat':
+                day_name = 'Sat'    # the same day
+            elif todays_day == 'Sun':
+                day_name = 'Sun'
+            else:
+                day_name = 'Sun'
+    elif day_name == 'weekday':
+        if when == 'after':
+            todays_day = DAYS[date.weekday()]
+            if todays_day in ('Fri', 'Sat', 'Sun'):
+                day_name = 'Mon'
+            else:   # we know DAYS starts with Mon
+                day_name = DAYS[date.weekday()+1]
+        elif when == 'on-or-after':
+            todays_day = DAYS[date.weekday()]
+            if todays_day in ('Sat', 'Sun'):
+                day_name = 'Mon'
+            else:
+                day_name = todays_day
+        elif when == 'before':
+            todays_day = DAYS[date.weekday()]
+            if todays_day in ('Sat', 'Sun', 'Mon'):
+                day_name = 'Fri'
+            else:   # we know DAYS starts with Mon, but we already dealt with that
+                day_name = DAYS[date.weekday()-1]
+        elif when == 'on-or-before':
+            todays_day = DAYS[date.weekday()]
+            if todays_day in ('Sat', 'Sun'):
+                day_name = 'Fri'
+            else:
+                day_name = todays_day
 
-        if this_lines:
-            yield this_start, this_lines
+    if when == 'after':
+        date = day_after_date(date, day_name)
+    elif when == 'on-or-after':
+        date = day_after_date(date, day_name, True)
+    elif when == 'before':
+        date = day_before_date(date, day_name)
+    else:
+        date = day_before_date(date, day_name, True)
 
-    def parse_date(self, date_part, not_yearly_reason=None):
-        """Parse something we accept as a date, and return an Event for it.
+    event = Event(date)
+    event.colon_date = colon_what(colon_word, words)
+    return event
 
-        If 'not_yearly_reason', then a <year> <mon> <day> style date may not
-        have an asterisk after the <year>. If this is not a "false" value, then
-        it should be a string explaining why not...
-        """
-        # Check for a magic word
-        words = date_part.split()
+def colon_condition_except(colon_word, event, words):
+    """An exception condition.
+
+    Applies to the preceding date line
+    """
+    text = ' '.join(words)
+    parts = text.split(',')
+    date_part = parts[0]
+    rest = ','.join(parts[1:])
+    eventlet = parse_date(date_part, start,
+                          'it does not make sense inside {}'.format(
+                          colon_what(colon_word, words)))
+    date = eventlet.date
+    event.not_on.add((date, rest))
+
+def colon_condition_until(colon_word, event, words):
+    """An ending condition.
+
+    <something> is <year> <month-name> <day>, and signifies the last date
+    for a repetitive event. If the date does not exactly match the
+    recurring event's date, then the last event is the one before this
+    date.
+
+    Applies to the preceding date line
+    """
+    eventlet = parse_date(' '.join(words), start,
+                          'it does not make sense inside {}'.format(
+                           colon_what(colon_word, words)))
+    date = eventlet.date
+    if date < event.date:
+        raise GiveUp('Date in {!r} is before main date {} {} {}'.format(
+            colon_what(colon_word, words), event.date.year,
+            MONTH_NUMBER[event.date.month], event.date.day))
+    if event.repeat_until is None:
+        event.repeat_until = date
+    elif event.repeat_until > date: # This new date is earlier, so use it
+        event.repeat_until = date
+
+def colon_condition_weekly(colon_word, event, words):
+    """Repeating weekly.
+
+    'words' should be empty.
+
+    Applies to the preceding date line
+    """
+    if words:
+        raise GiveUp('Not expecting text after :weekly, in {!r}'.format(
+            colon_what(colon_word, words)))
+    event.repeat_every_N_days.add(7)
+
+def colon_condition_fortnightly(colon_word, event, words):
+    """Repeating fortnightly
+
+    'words' should be empty.
+
+    Applies to the preceding date line
+    """
+    if words:
+        raise GiveUp('Not expecting text after :fortnightly, in {!r}'.format(
+            colon_what(colon_word, words)))
+    event.repeat_every_N_days.add(14)
+
+def colon_condition_monthly(colon_word, event, words):
+    """Repeating monthly
+
+    'words' should be empty.
+
+    Applies to the preceding date line
+    """
+    # Which is just the same as repeating on the same day each month
+    event.repeat_on_Nth_of_month.add(event.date.day)
+
+def colon_condition_every(colon_word, event, words):
+    """Repeat every <something> days
+
+    As in ":every 5 days"
+
+    ":every 7 days" is thus the same as ":weekly"
+    """
+    if len(words) != 2 or words[1] != 'days':
+        raise GiveUp("Expected ':repeat <num> days'\n"
+                     'not {!r}'.format(colon_what(colon_word, words)))
+
+    try:
+        every = int(words[0])
+    except ValueError:
+        raise GiveUp('Expected:\n'
+                     '  :every <every> days\n'
+                     'not {!r}'.format(colon_what(colon_word, words)))
+    event.repeat_every_N_days.add(every)
+
+def colon_condition_for(colon_word, event, words):
+    """Repeat for <count> days or weekdays
+
+    As in ":for 5 days" or ":for 10 weekdays"
+    """
+    if len(words) != 2 or words[1].lower() not in ('days', 'weekdays'):
+        raise GiveUp("Expected ':repeat <num> days'\n"
+                     'not {!r}'.format(colon_what(colon_word, words)))
+
+    what = words[1].lower()
+    try:
+        count = int(words[0])
+    except ValueError:
+        raise GiveUp('Expected:\n'
+                     '  :for <count> {}\n'
+                     'not {!r}'.format(what, colon_what(colon_word, words)))
+    if what == 'days':
+        until = event.date + datetime.timedelta(days=count)
+    else:
+        # Hah - weekdays only
+        one_day = datetime.timedelta(days=1)
+        until = event.date
+        while count > 0:
+            until = until + one_day
+            while until.weekday in (5, 6):
+                event.not_on.add(until)
+                until = until + one_day
+            count -= 1
+    if event.repeat_until is None:
+        event.repeat_until = until
+    elif event.repeat_until > until: # This new date is earlier, so use it
+        event.repeat_until = until
+
+colon_event_methods = {':every': colon_event_every,
+                       ':first': colon_event_first,
+                       ':second': colon_event_second,
+                       ':third': colon_event_third,
+                       ':fourth': colon_event_fourth,
+                       ':fifth': colon_event_fifth,
+                       ':last': colon_event_last,
+                       ':lastbutone': colon_event_lastbutone,
+                       ':easter': colon_event_easter,
+                       ':weekend': colon_event_weekmagic,
+                       ':weekday': colon_event_weekmagic,
+                       ':mon': colon_event_weekmagic,
+                       ':tue': colon_event_weekmagic,
+                       ':wed': colon_event_weekmagic,
+                       ':thu': colon_event_weekmagic,
+                       ':fri': colon_event_weekmagic,
+                       ':sat': colon_event_weekmagic,
+                       ':sun': colon_event_weekmagic,
+                      }
+
+colon_condition_methods = {':except': colon_condition_except,
+                           ':until': colon_condition_until,
+                           ':weekly': colon_condition_weekly,
+                           ':fortnightly': colon_condition_fortnightly,
+                           ':monthly': colon_condition_monthly,
+                           ':every': colon_condition_every,
+                           ':for': colon_condition_for,
+                          }
+
+def yield_lines(lines):
+    """Yield interesting lines.
+
+    Returns lists of the form:
+
+        lineno, [text, ...]
+
+    Empty lines and comment lines are not returned. Indented lines have their
+    indentation removed, and are returned as the '...'.
+
+    For instance:
+
+        >>> lines = ['# A comment',
+        ...          'Line 2',
+        ...          'Line 3',
+        ...          '  line 3 continued',
+        ...          'Line 5',
+        ...          '  ',
+        ...          'Line 7  ',
+        ...          '  line 7 continued  ',
+        ...          '  even more line 7  ',
+        ...         ]
+        >>> for line in yield_lines(lines):
+        ...     print(line)
+        (2, ['Line 2'])
+        (3, ['Line 3', 'line 3 continued'])
+        (5, ['Line 5'])
+        (7, ['Line 7', 'line 7 continued', 'even more line 7'])
+
+    but:
+
+        >>> bad_lines = [' not line 1']
+        >>> for line in yield_lines(bad_lines):
+        ...     print(line)
+        Traceback (most recent call last):
+        ...
+        GiveUp: Line 1 is indented, but follows the start of file
+
+        >>> bad_lines = ['Line 1',
+        ...              '# a comment',
+        ...              '  not line 1',
+        ...             ]
+        >>> for line in yield_lines(bad_lines):
+        ...     print(line)
+        Traceback (most recent call last):
+        ...
+        GiveUp: Line 3 is indented, but follows a comment
+
+        >>> bad_lines = ['Line 1',
+        ...              '',
+        ...              '  not line 1',
+        ...             ]
+        >>> for line in yield_lines(bad_lines):
+        ...     print(line)
+        Traceback (most recent call last):
+        ...
+        GiveUp: Line 3 is indented, but follows an empty line
+    """
+    lineno = 0
+    last_was = 'the start of file'
+    this_start = 0
+    this_lines = []
+    for line in lines:
+        lineno += 1
+
+        # Carefully lose trailing (but not leading) whitespace
+        text = line.rstrip()
+
+        # Empty lines are ignored
+        if not text:
+            last_was = 'an empty line'
+            if this_lines:
+                yield this_start, this_lines
+                this_lines = []
+            continue
+
+        # Figure out if it is indented or not
+        rest = text.lstrip()
+        indented = rest != text
+        text = rest
+
+        # Any line with a hash in the first column is a comment
+        if text[0] == '#':
+            last_was = 'a comment'
+            if this_lines:
+                yield this_start, this_lines
+                this_lines = []
+            continue
+
+        if indented:
+            if this_lines:
+                this_lines.append(text)
+                last_was = 'an indented line'
+            else:
+                raise GiveUp('Line {} is indented, but follows {}'.format(
+                    lineno, last_was))
+        else:
+            if this_lines:
+                yield this_start, this_lines
+            this_start = lineno
+            this_lines = [text]
+            last_was = 'a date line'
+
+    if this_lines:
+        yield this_start, this_lines
+
+def parse_date(date_part, start, not_yearly_reason=None):
+    """Parse something we accept as a date, and return an Event for it.
+
+    If 'not_yearly_reason', then a <year> <mon> <day> style date may not
+    have an asterisk after the <year>. If this is not a "false" value, then
+    it should be a string explaining why not...
+    """
+    # Check for a magic word
+    words = date_part.split()
+    if words[0][0] == ':':
+        colon_word = words[0].lower()
+        try:
+            fn = colon_event_methods[colon_word]
+        except KeyError:
+            raise GiveUp('Unexpected ":" word as <date>, {!r}'.format(colon_word))
+        event = fn(colon_word, words[1:], start)
+    else:
+        date, yearly = parse_year_month_day(date_part)
+        event = Event(date)
+        if yearly:
+            if not_yearly_reason:
+                raise GiveUp('The "yearly" asterisk is not allowed in {}\n'
+                             '{}'.format(date_part, not_yearly_reason))
+            event.repeat_yearly = True
+    return event
+
+def parse_event(first_lineno, first_line, more_lines, start):
+    """Create an event from the lines describing it.
+    """
+
+    # We always want <thing>, <rest>
+    parts = first_line.split(',')
+    date_part = parts[0]
+    rest = ','.join(parts[1:])
+
+    if not rest:
+        if ',' not in first_line:
+            raise GiveUp('Missing comma in line {}\n'
+                         'Unindented lines should be of the form <date>, <rest>\n'
+                         '{}: {!r}'.format(first_lineno, first_lineno, first_line))
+        else:
+            raise GiveUp('No text after comma in line {}\n'
+                         'Unindented lines should be of the form <date>, <rest>\n'
+                         '{}: {!r}'.format(first_lineno, first_lineno, first_line))
+
+    try:
+        event = parse_date(date_part, start)
+    except GiveUp as e:
+        raise GiveUp('Error in line {}\n'
+                     '{}\n'
+                     '{}: {!r}'.format(first_lineno, e,
+                                       first_lineno, first_line))
+    event.set_text(rest)
+
+    this_lineno = first_lineno
+    for text in more_lines:
+        this_lineno += 1
+        words = text.split()
         if words[0][0] == ':':
             colon_word = words[0].lower()
             try:
-                fn = self.colon_event_methods[colon_word]
+                fn = colon_condition_methods[colon_word]
+                fn(colon_word, event, words[1:])
             except KeyError:
-                raise GiveUp('Unexpected ":" word as <date>, {!r}'.format(colon_word))
-            event = fn(colon_word, words[1:])
-        else:
-            date, day_name, yearly = parse_year_month_day(date_part)
-            event = Event(date, day_name)
-            if yearly:
-                if not_yearly_reason:
-                    raise GiveUp('The "yearly" asterisk is not allowed in {}\n'
-                                 '{}'.format(date_part, not_yearly_reason))
-                event.repeat_yearly = True
-        return event
-
-    def parse_event(self, first_lineno, first_line, more_lines):
-        """Create an event from the lines describing it.
-        """
-
-        # We always want <thing>, <rest>
-        parts = first_line.split(',')
-        date_part = parts[0]
-        rest = ','.join(parts[1:])
-
-        if not rest:
-            if ',' not in first_line:
-                raise GiveUp('Missing comma in line {}\n'
-                             'Unindented lines should be of the form <date>, <rest>\n'
-                             '{}: {!r}'.format(first_lineno, first_lineno, first_line))
-            else:
-                raise GiveUp('No text after comma in line {}\n'
-                             'Unindented lines should be of the form <date>, <rest>\n'
-                             '{}: {!r}'.format(first_lineno, first_lineno, first_line))
-
-        try:
-            event = self.parse_date(date_part)
-        except GiveUp as e:
-            raise GiveUp('Error in line {}\n'
-                         '{}\n'
-                         '{}: {!r}'.format(first_lineno, e,
-                                           first_lineno, first_line))
-        event.set_text(rest)
-
-        this_lineno = first_lineno
-        for text in more_lines:
-            this_lineno += 1
-            words = text.split()
-            if words[0][0] == ':':
-                colon_word = words[0].lower()
-                try:
-                    fn = self.colon_condition_methods[colon_word]
-                    fn(colon_word, event, words[1:])
-                except KeyError:
-                    raise GiveUp('Error in line {}\n'
-                                 'Unexpected ":" word as <condition>, {!r}\n{}: {!r}'.format(
-                                     this_lineno, colon_word, this_lineno, text))
-                except GiveUp as e:
-                    raise GiveUp('Error in line {}\n'
-                                 '{}\n'
-                                 '{}: {!r}'.format(this_lineno, e,
-                                                   this_lineno, text))
-            else:
                 raise GiveUp('Error in line {}\n'
-                             'Indented line should be a <condition>, starting with a colon,\n'
-                             '{}: {!r}'.format(this_lineno, this_lineno, text))
-        return event
+                             'Unexpected ":" word as <condition>, {!r}\n{}: {!r}'.format(
+                                 this_lineno, colon_word, this_lineno, text))
+            except GiveUp as e:
+                raise GiveUp('Error in line {}\n'
+                             '{}\n'
+                             '{}: {!r}'.format(this_lineno, e,
+                                               this_lineno, text))
+        else:
+            raise GiveUp('Error in line {}\n'
+                         'Indented line should be a <condition>, starting with a colon,\n'
+                         '{}: {!r}'.format(this_lineno, this_lineno, text))
+    return event
 
-    def parse_lines(self, lines):
-        r"""Report on the given lines.
+def parse_lines(lines, start):
+    r"""Report on the given lines.
 
-        For instance:
+    For instance:
 
-            >>> w = What(today=datetime.date(2013, 9, 29))
-            >>> events = w.parse_lines(
-            ...     [r'# This is a comment',
-            ...      r'1960* Feb 18 Thu, Tibs is :age, born in :year',
-            ...      r'2013 Sep 13 Fri, something # This is not a comment',
-            ...      r'2013 Sep 14, another something',
-            ...      r'  :every 4 days',
-            ...      r':every Thu, Thomas singing lesson',
-            ...      r':weekday after 2013 Sep 28, Should be a Monday',
-            ...      r':Mon after 2013 Sep 28, Should be the same',
-            ...     ])
-            >>> for event in (sorted(events)):
-            ...    print(event)
-            1960 Feb 18 Thu,  Tibs is :age, born in :year
-              :yearly
-            2013 Sep 13 Fri,  something # This is not a comment
-            2013 Sep 14 Sat,  another something
-              :every 4 days
-            2013 Sep 30 Mon,  Should be a Monday
-            2013 Sep 30 Mon,  Should be the same
-            2013 Oct  3 Thu,  Thomas singing lesson
-              :every Thu
+        >>> today=datetime.date(2013, 9, 29)
+        >>> events = parse_lines(
+        ...     [r'# This is a comment',
+        ...      r'1960* Feb 18 Thu, Tibs is :age, born in :year',
+        ...      r'2013 Sep 13 Fri, something # This is not a comment',
+        ...      r'2013 Sep 14, another something',
+        ...      r'  :every 4 days',
+        ...      r':every Thu, Thomas singing lesson',
+        ...      r':weekday after 2013 Sep 28, Should be a Monday',
+        ...      r':Mon after 2013 Sep 28, Should be the same',
+        ...     ], today)
+        >>> for event in (sorted(events)):
+        ...    print(event)
+        1960 Feb 18 Thu,  Tibs is :age, born in :year
+          :yearly
+        2013 Sep 13 Fri,  something # This is not a comment
+        2013 Sep 14 Sat,  another something
+          :every 4 days
+        :mon after 2013 Sep 28,  Should be the same
+        :weekday after 2013 Sep 28,  Should be a Monday
+        :every Thu,  Thomas singing lesson
+          :every Thu
 
-        but:
+        >>> for event in (sorted(events)):
+        ...    print(repr(event))
+        1960 Feb 18 Thu,  Tibs is :age, born in :year
+          :yearly
+        2013 Sep 13 Fri,  something # This is not a comment
+        2013 Sep 14 Sat,  another something
+          :every 4 days
+        2013 Sep 30 Mon,  Should be the same
+        2013 Sep 30 Mon,  Should be a Monday
+        2013 Oct  3 Thu,  Thomas singing lesson
+          :every Thu
 
-            >>> w.parse_lines([r'Fred'])
-            Traceback (most recent call last):
-            ...
-            GiveUp: Missing comma in line 1
-            Unindented lines should be of the form <date>, <rest>
-            1: 'Fred'
+    but:
 
-            >>> w.parse_lines([r'Fred,'])
-            Traceback (most recent call last):
-            ...
-            GiveUp: No text after comma in line 1
-            Unindented lines should be of the form <date>, <rest>
-            1: 'Fred,'
+        >>> parse_lines([r'Fred'], today)
+        Traceback (most recent call last):
+        ...
+        GiveUp: Missing comma in line 1
+        Unindented lines should be of the form <date>, <rest>
+        1: 'Fred'
 
-            >>> w.parse_lines([r'Fred, Jim'])
-            Traceback (most recent call last):
-            ...
-            GiveUp: Error in line 1
-            Date must be <year>[*] <month-name> <day>
-                      or <year>[*] <month-name> <day> <day-name>
-            not 'Fred'
-            1: 'Fred, Jim'
-        """
-        events = set()
-        for first_lineno, this_lines in self.yield_lines(lines):
-            event = self.parse_event(first_lineno, this_lines[0], this_lines[1:])
-            events.add(event)
-        return events
+        >>> parse_lines([r'Fred,'], today)
+        Traceback (most recent call last):
+        ...
+        GiveUp: No text after comma in line 1
+        Unindented lines should be of the form <date>, <rest>
+        1: 'Fred,'
 
-    def parse_file(self, filename):
-        """Report on the information in the named file.
-        """
-        with open(filename) as fd:
-            events = self.parse_lines(fd)
-        return events
+        >>> parse_lines([r'Fred, Jim'], today)
+        Traceback (most recent call last):
+        ...
+        GiveUp: Error in line 1
+        Date must be <year>[*] <month-name> <day>
+                  or <year>[*] <month-name> <day> <day-name>
+        not 'Fred'
+        1: 'Fred, Jim'
+    """
+    events = set()
+    for first_lineno, this_lines in yield_lines(lines):
+        event = parse_event(first_lineno, this_lines[0], this_lines[1:], start)
+        events.add(event)
+    return events
 
-    def find_events(self, events):
-        """Return a set of (date, text) tuples for the events in our date range.
-        """
-        things = set()
-        for event in events:
-            things.update(event.get_dates(self.start, self.end))
+def parse_file(self, filename):
+    """Report on the information in the named file.
+    """
+    with open(filename) as fd:
+        events = parse_lines(fd)
+    return events
 
-        return things
+def find_events(events, start, end, at_names=None):
+    """Return a set of (date, text) tuples for the events in our date range.
+    """
+    things = set()
+    for event in events:
+        things.update(event.get_dates(start, end, at_names))
+
+    return things
+
+def determine_dates(start=None, today=None, end=None):
+    """Given the three "bounding" dates, validate and expand them.
+
+    Returns actual values for start, yesterday, today, end
+    """
+    if today is None:
+        today = datetime.date.today()
+
+    yesterday = today - datetime.timedelta(days=1)
+
+    if start is None:
+        # Use "yesterday"
+        start = yesterday
+
+    if end is None:
+        # Add four weeks
+        end = datetime.date.fromordinal(today.toordinal() + 4*7)
+
+    if start > today:
+        raise GiveUp('Start date {} is after "today" {}'.format(
+            start.isoformat(), today.isoformat()))
+
+    if end < today:
+        raise GiveUp('End date {} is before "today" {}'.format(
+            end.isoformat(), today.isoformat()))
+
+    if start > end:
+        raise GiveUp('Start date {} is after end date {}'.format(
+            start.isoformat(), end.isoformat()))
+
+    return start, end, today
 
 def report(args):
 
@@ -1559,11 +1528,12 @@ def report(args):
             raise GiveUp('Unexpected argument {:r} (already got'
                          ' filename {:r}'.format(word. filename))
 
+    start, yesterday, today, end = determine_dates(start, today, end)
+
     if not filename:
         filename = 'what.txt'
     try:
-        w = What(today=today, start=start, end=end, at_words=at_words)
-        events = w.parse_file(filename, )
+        events = parse_file(filename, start)
     except GiveUp as e:
         raise GiveUp('Error reading file {!r}\n{}'.format(filename, e))
 
@@ -1578,13 +1548,14 @@ def report(args):
             print(repr(event))
 
         print('==============================================================')
-        things = w.find_events(events)
+        things = find_events(events, start, end, at_names)
 
         for date, text in sorted(things):
             print('{} {} {:2} {}, {}'.format(date.year,
                 MONTH_NAME[date.month], date.day, DAYS[date.weekday()], text))
 
-        print('start {} .. today {} .. end {}'.format(w.start, w.today, w.end))
+        print('start {} .. yesterday {} .. today {} .. end {}'.format(start,
+            yesterday, today, end))
 
 if __name__ == '__main__':
     args = sys.argv[1:]
