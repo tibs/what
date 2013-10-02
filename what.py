@@ -263,6 +263,52 @@ def calc_easter(year):
     day = f % 31 + 1
     return datetime.date(year, month, day)
 
+def calc_ordinal_day(start, ordinal, day_name):
+    """Return the 'ordinal'th day called 'day_name' in 'start's month.
+
+    Returns a date, or None (the latter should only really occur when
+    the ordinal is 5). Currently, 'ordinal' may be -2, -1, 1, 2, 3, 4 or 5.
+
+    For instance:
+
+        >>> print(calc_ordinal_day(datetime.date(2013, 10, 2), 1, 'Wed'))
+        2013-10-02
+        >>> print(calc_ordinal_day(datetime.date(2013, 10, 2), 5, 'Thu'))
+        2013-10-31
+        >>> print(calc_ordinal_day(datetime.date(2013, 10, 2), 5, 'Fri'))
+        None
+    """
+
+    if day_name not in DAYS:
+        raise GiveUp('Ordinal day {!r} is not supported'.format(day_name))
+
+    if ordinal == 1:
+        first_day_of_month = start.replace(day=1)
+        date = day_after_date(first_day_of_month, day_name, True)
+    elif ordinal == 2:
+        a_week_after_start = start.replace(day=1+7)
+        date = day_after_date(a_week_after_start, day_name, True)
+    elif ordinal == 3:
+        two_weeks_after_start = start.replace(day=1+7+7)
+        date = day_after_date(two_weeks_after_start, day_name, True)
+    elif ordinal == 4:
+        three_weeks_after_start = start.replace(day=1+7+7+7)
+        date = day_after_date(three_weeks_after_start, day_name, True)
+    elif ordinal == 5:
+        four_weeks_after_start = start.replace(day=1+7+7+7+7)
+        date = day_after_date(four_weeks_after_start, day_name, True)
+        if date.month != start.month:
+            return None
+    elif ordinal == -1:
+        last_day_of_month = start.replace(day=month_len)
+        date = day_before_date(last_day_of_month, day_name, True)
+    elif ordinal == -2:
+        first_weekday, month_len = calendar.monthrange(start.year, start.month)
+        a_week_before_end = start.replace(day=month_len-7)
+    else:
+        raise GiveUp('Ordinal index {} is not supported'.format(ordinal))
+    return date
+
 def parse_year_month_day(text):
     """Given a text containing an actual date, turn it into a datetime date.
 
@@ -559,10 +605,12 @@ class Event(object):
 
         if self.repeat_until:
             if self.repeat_until < start:
-                print('repeat until {} is before start {} - stopping'.format(self.repeat_until, start))
+                print('repeat until {} is before start {}'
+                      ' - stopping'.format(self.repeat_until, start))
                 return set()
             elif self.repeat_until < end:
-                print('repeat until {} is before end {} - adjusting range'.format(self.repeat_until, end))
+                print('repeat until {} is before end {}'
+                      ' - adjusting range'.format(self.repeat_until, end))
                 end = self.repeat_until
 
         if start <= self.date <= end:
@@ -598,7 +646,11 @@ class Event(object):
 
         if self.repeat_ordinal:
             for index, day_name in sorted(self.repeat_ordinal):
-                print('ignoring repeat on {}<th> {} of month'.format(index, day_name))
+                d = calc_ordinal_day(self.date, index, day_name)
+                # We know that if they asked for the fifth day of a given
+                # name, it may or may not occur in this month
+                if d:
+                    dates.add(d)
 
         if self.not_on:
             for date, reason in sorted(self.not_on):
@@ -716,8 +768,7 @@ def colon_event_first(colon_word, words, start):
             words[0], colon_what(colon_word, words)))
 
     day_name = words[0].capitalize()
-    first_day_of_month = start.replace(day=1)
-    date = day_after_date(first_day_of_month, day_name, True)
+    date = calc_ordinal_day(start, 1, day_name)
     event = Event(date)
     event.repeat_ordinal.add((1, day_name))
     event.colon_date = colon_what(colon_word, words)
@@ -738,8 +789,7 @@ def colon_event_second(colon_word, words, start):
             words[0], colon_what(colon_word, words)))
 
     day_name = words[0].capitalize()
-    a_week_after_start = start.replace(day=1+7)
-    date = day_after_date(a_week_after_start, day_name, True)
+    date = calc_ordinal_day(start, 2, day_name)
     event = Event(date)
     event.repeat_ordinal.add((2, day_name))
     event.colon_date = colon_what(colon_word, words)
@@ -760,8 +810,7 @@ def colon_event_third(colon_word, words, start):
             words[0], colon_what(colon_word, words)))
 
     day_name = words[0].capitalize()
-    two_weeks_after_start = start.replace(day=1+7+7)
-    date = day_after_date(two_weeks_after_start, day_name, True)
+    date = calc_ordinal_day(start, 3, day_name)
     event = Event(date)
     event.repeat_ordinal.add((3, day_name))
     event.colon_date = colon_what(colon_word, words)
@@ -782,8 +831,7 @@ def colon_event_fourth(colon_word, words, start):
             words[0], colon_what(colon_word, words)))
 
     day_name = words[0].capitalize()
-    three_weeks_after_start = start.replace(day=1+7+7+7)
-    date = day_after_date(three_weeks_after_start, day_name, True)
+    date = calc_ordinal_day(start, 4, day_name)
     event = Event(date)
     event.repeat_ordinal.add((4, day_name))
     event.colon_date = colon_what(colon_word, words)
@@ -795,6 +843,8 @@ def colon_event_fifth(colon_word, words, start):
     <something> can be:
 
         * <day-name> -- the fifth day of that name in a month
+
+    NB: May return None if there is no fifth day of that name in this month
     """
     if len(words) != 1:
         raise GiveUp('Expected a day name, in {}'.format(
@@ -804,12 +854,14 @@ def colon_event_fifth(colon_word, words, start):
             words[0], colon_what(colon_word, words)))
 
     day_name = words[0].capitalize()
-    four_weeks_after_start = start.replace(day=1+7+7+7+7)
-    date = day_after_date(four_weeks_after_start, day_name, True)
-    event = Event(date)
-    event.repeat_ordinal.add((5, day_name))
-    event.colon_date = colon_what(colon_word, words)
-    return event
+    date = calc_ordinal_day(start, 5, day_name)
+    if date:
+        event = Event(date)
+        event.repeat_ordinal.add((5, day_name))
+        event.colon_date = colon_what(colon_word, words)
+        return event
+    else:
+        return None
 
 def colon_event_last(colon_word, words, start):
     """The last <something>
@@ -828,8 +880,7 @@ def colon_event_last(colon_word, words, start):
     day_name = words[0].capitalize()
 
     first_weekday, month_len = calendar.monthrange(start.year, start.month)
-    last_day_of_month = start.replace(day=month_len)
-    date = day_before_date(last_day_of_month, day_name, True)
+    date = calc_ordinal_day(start, -1, day_name)
     event = Event(date)
     event.repeat_ordinal.add((-1, day_name))
     event.colon_date = colon_what(colon_word, words)
@@ -850,9 +901,7 @@ def colon_event_lastbutone(colon_word, words, start):
             words[0], colon_what(colon_word, words)))
 
     day_name = words[0].capitalize()
-
-    first_weekday, month_len = calendar.monthrange(start.year, start.month)
-    a_week_before_end = start.replace(day=month_len-7)
+    date = calc_ordinal_day(start, -2, day_name)
     date = day_before_date(a_week_before_end, day_name, True)
     event = Event(date)
     event.repeat_ordinal.add((-1, day_name))
@@ -1552,9 +1601,14 @@ def report(args):
         print('==============================================================')
         things = find_events(events, start, end, at_words)
 
+        prev = None
         for date, text in sorted(things):
+            weekday = date.weekday
+            if prev and weekday < prev:
+                print('---- ---- ---- ---- ---- ---- ---- ---- ----')
             print('{} {} {:2} {}, {}'.format(date.year,
                 MONTH_NAME[date.month], date.day, DAYS[date.weekday()], text))
+            prev = weekday
 
         print('start {} .. yesterday {} .. today {} .. end {}'.format(start,
             yesterday, today, end))
