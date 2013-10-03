@@ -1840,11 +1840,12 @@ def report(args):
     for date, text in sorted(things):
         weekday = date.weekday()
         if prev and weekday < prev:
-            lines.append('{}{}'.format(' '*spacer, '-'*(80-spacer)))
+            lines.append(' {}{}'.format(' '*spacer, '-'*(80-spacer)))
         # What order do I *actually* want the date written out in?
         # I think this is perhaps the most useful for looking at nearby
         # dates (when the day and date are most important)
-        lines.append('{} {:2} {} {}, {}'.format(
+        lines.append('{}{} {:2} {} {}, {}'.format(
+            '*' if date == today else ' ',
             DAYS[date.weekday()],
             date.day,
             MONTH_NAME[date.month],
