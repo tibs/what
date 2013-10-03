@@ -149,10 +149,12 @@ The case of colon-words is ignored.
 from __future__ import division
 from __future__ import print_function
 
-import sys
-import re
-import datetime
 import calendar
+import datetime
+import os
+import re
+import subprocess
+import sys
 
 from functools import total_ordering
 
@@ -168,6 +170,11 @@ ORDINAL = {1: 'first', 2:'second', 3:'third', 4:'fourth', 5:'fifth',
            -1:'last', -2:'lastbutone'}
 
 timespan_re = re.compile(r'(\d|\d\d):(\d\d)\.\.(\d|\d\d):(\d\d)')
+
+# Carefully match at either the start of the line/string or after a non-word,
+# and then accept the @ or : character followed by alphanumerics of either case
+at_word_re = re.compile(r'(?:^|\W)(@\w+)')
+colon_word_re = re.compile(r'(?:^|\W)(:\w+)')
 
 class GiveUp(Exception):
     pass
@@ -424,19 +431,9 @@ class Event(object):
     """A representation of an event.
     """
 
-    def __init__(self, date, day_name=None):
-        """Create a basic event.
-
-        A basic event occurs just once, on the date given.
-        """
+    def __init__(self, date):
         self.date = date
-        self.text = None
-
-        if day_name is None:
-            self.day_name = DAYS[date.weekday()]
-        else:
-            validate_day_name(date, day_name)
-            self.day_name = day_name
+        self._text = None
 
         # If this event was actually specified with a colon date (e.g.,
         # :easter), then we can remember it, for later reporting back
@@ -468,8 +465,41 @@ class Event(object):
         # (<date>, '') if there was no reason given
         self.not_on = set()
 
-    def set_text(self, text):
-        self.text = text
+    @property
+    def text(self):
+        return self._text
+
+    @text.setter
+    def text(self, value):
+        """Set the text field of an event.
+
+        Also finds any <at-word> or <colon-word> occurrences therein:
+
+            >>> e = Event(datetime.date(2012, 10, 3))
+            >>> e.text = 'Fred'
+            >>> e.text
+            'Fred'
+            >>> print(e.at_words)
+            set([])
+            >>> print(e.colon_words)
+            set([])
+            >>> e.text = '@Jim,Fred :age,:year, @jim/@bob'
+            >>> e.text
+            '@Jim,Fred :age,:year, @jim/@bob'
+            >>> sorted(e.at_words)
+            ['@bob', '@jim']
+            >>> sorted(e.colon_words)
+            [':age', ':year']
+        """
+        self._text = value
+
+        # Is there anything interesting in the text...
+        self.at_words = set([x.lower() for x in re.findall(at_word_re, value)])
+        self.colon_words = set([x.lower() for x in re.findall(colon_word_re, value)])
+
+    @property
+    def day_name(self):
+        return DAYS[self.date.weekday()]
 
     def __str__(self):
         """Return something meant to be close to what the user wrote.
@@ -477,11 +507,11 @@ class Event(object):
         parts = []
 
         if self.colon_date:
-            parts.append('{}, {}'.format(self.colon_date, self.text))
+            parts.append('{}, {}'.format(self.colon_date, self._text))
         else:
             parts.append('{} {} {:2d} {}, {}'.format(self.date.year,
                 MONTH_NAME[self.date.month], self.date.day, self.day_name,
-                self.text))
+                self._text))
 
         # We have to guess whether the user had a star after the year,
         # or wrote ':yearly'. Go with the latter, in case I stop supporting
@@ -530,7 +560,7 @@ class Event(object):
         parts = []
         parts.append('{} {} {:2d} {}, {}'.format(self.date.year,
             MONTH_NAME[self.date.month], self.date.day, self.day_name,
-            self.text))
+            self._text))
 
         if self.repeat_yearly:
             parts.append('  :yearly')
@@ -566,6 +596,12 @@ class Event(object):
                     parts.append('  :except {} {} {} {}'.format(date.year,
                         MONTH_NAME[date.month], date.day, DAYS[date.weekday()]))
 
+        if self.at_words:
+            parts.append('  <at-words> {}'.format(', '.join(sorted(self.at_words))))
+
+        if self.colon_words:
+            parts.append('  <colon-words> {}'.format(', '.join(sorted(self.colon_words))))
+
         return '\n'.join(parts)
 
     def __hash__(self):
@@ -600,6 +636,12 @@ class Event(object):
         """
         # Maybe sanity check our conditions lazily, at this point...
         # ...or maybe not
+
+        # If the caller asked for only texts that have particular at-words
+        # within them, then we should/can check that first
+        if at_words and not at_words.intersect(self.at_words):
+            # OK, we don't match
+            return []
 
         dates = set()
 
@@ -657,9 +699,20 @@ class Event(object):
                 if date in dates:
                     dates.remove(date)
 
+        if not dates:
+            return []
+
+        # We don't have many colon substitution words, so we can just deal
+        # with them "by hand"
+        text = self._text
+        if ':year' in self.colon_words:
+            text = text.replace(':year', str(self.date.year))
+
         things = []
         for date in dates:
-            things.append((date, self.text))
+            if ':age' in self.colon_words:
+                text = text.replace(':age', str(date.year - self.date.year))
+            things.append((date, text))
 
         return things
 
@@ -1386,7 +1439,7 @@ def parse_event(first_lineno, first_line, more_lines, start):
                      '{}\n'
                      '{}: {!r}'.format(first_lineno, e,
                                        first_lineno, first_line))
-    event.set_text(rest)
+    event.text = rest
 
     this_lineno = first_lineno
     for text in more_lines:
@@ -1424,33 +1477,35 @@ def parse_lines(lines, start):
         ...      r'2013 Sep 13 Fri, something # This is not a comment',
         ...      r'2013 Sep 14, another something',
         ...      r'  :every 4 days',
-        ...      r':every Thu, Thomas singing lesson',
+        ...      r':every Thu, @Thomas singing lesson',
         ...      r':weekday after 2013 Sep 28, Should be a Monday',
         ...      r':Mon after 2013 Sep 28, Should be the same',
         ...     ], today)
         >>> for event in (sorted(events)):
         ...    print(event)
-        1960 Feb 18 Thu,  Tibs is :age, born in :year
+        1960 Feb 18 Thu, Tibs is :age, born in :year
           :yearly
-        2013 Sep 13 Fri,  something # This is not a comment
-        2013 Sep 14 Sat,  another something
+        2013 Sep 13 Fri, something # This is not a comment
+        2013 Sep 14 Sat, another something
           :every 4 days
-        :mon after 2013 Sep 28,  Should be the same
-        :weekday after 2013 Sep 28,  Should be a Monday
-        :every Thu,  Thomas singing lesson
+        :mon after 2013 Sep 28, Should be the same
+        :weekday after 2013 Sep 28, Should be a Monday
+        :every Thu, @Thomas singing lesson
           :every Thu
 
         >>> for event in (sorted(events)):
         ...    print(repr(event))
-        1960 Feb 18 Thu,  Tibs is :age, born in :year
+        1960 Feb 18 Thu, Tibs is :age, born in :year
           :yearly
-        2013 Sep 13 Fri,  something # This is not a comment
-        2013 Sep 14 Sat,  another something
+          <colon-words> :age, :year
+        2013 Sep 13 Fri, something # This is not a comment
+        2013 Sep 14 Sat, another something
           :every 4 days
-        2013 Sep 30 Mon,  Should be the same
-        2013 Sep 30 Mon,  Should be a Monday
-        2013 Oct  3 Thu,  Thomas singing lesson
+        2013 Sep 30 Mon, Should be the same
+        2013 Sep 30 Mon, Should be a Monday
+        2013 Oct  3 Thu, @Thomas singing lesson
           :every Thu
+          <at-words> @thomas
 
     but:
 
@@ -1531,7 +1586,153 @@ def determine_dates(start=None, today=None, end=None):
 
     return start, yesterday, today, end
 
+def normalise_dir(dir):
+    dir = os.path.expanduser(dir)
+    dir = os.path.abspath(dir)
+    dir = os.path.normpath(dir)     # remove double slashes, etc.
+    return dir
+
+def page(text):
+    pager = os.environ.get('PAGER', 'more')
+    try:
+        path = os.environ.get('PATH', os.defpath)
+        path = path.split(os.pathsep)
+        for locn in path:
+            locn = normalise_dir(locn)
+            prog = os.path.join(locn, pager)
+            if os.path.exists(prog):
+                try:
+                    proc = subprocess.Popen([prog],
+                                            stdin=subprocess.PIPE,
+                                            stderr=subprocess.STDOUT)
+                    proc.communicate(text)
+                    return
+                except OSError:
+                    # We're not allowed to run it, or some other problem,
+                    # so look for another candidate
+                    continue
+        # And if nothing else works, just print it out
+        print(text)
+    except IOError: # For instance, a pipe error due to "q" at the prompt
+        pass
+
+def _parse_day(switch, day):
+    day_name = day.capitalize()
+    if day_name in DAY_NAMES:
+        date = day_after_date(today, day_name, True)
+        return date.day
+    try:
+        return int(day)
+    except ValueError:
+        raise GiveUp('Expected a date after {!r}, but day {!r} is not'
+                     ' a 3-letter day name or an integer'.format(switch, day))
+
+def _parse_int_day(switch, day):
+    try:
+        return int(day)
+    except ValueError:
+        raise GiveUp('Expected a date after {!r}, but day {!r} is not'
+                     ' an integer'.format(switch, day))
+
+def _parse_month(switch, mon):
+    mon_name = mon.capitalize()
+    if mon_name in MONTH_NUMBER:
+        return MONTH_NUMBER[mon_name]
+    try:
+        return int(mon)
+    except ValueError:
+        raise GiveUp('Expected a date after {!r}, but month {!r} is not'
+                     ' a 3-letter month name or an integer'.format(switch, mon))
+
+def _parse_int_year(switch, year):
+    try:
+        return int(year)
+    except ValueError:
+        raise GiveUp('Expected a date after {!r}, but year {!r} is not'
+                     ' an integer'.format(switch, year))
+
+def get_cmdline_date(switch, args):
+    today = datetime.date.today()
+    try:
+        text = args.pop(0)
+    except IndexError:
+        raise GiveUp('Expected a day or date after {!r}'.format(switch))
+
+    parts = text.split('-')
+    if len(parts) == 1:
+        if parts[0].lower() == 'yesterday':
+            return datetime.date.today() - datetime.timedelta(days=1)
+        else:
+            day = _parse_day(switch, parts[0])
+            return today.replace(day=day)
+    elif len(parts) == 2:
+        day = _parse_int_day(switch, parts[0])
+        month = _parse_month(switch, parts[1])
+        return today.replace(day=day, month=month)
+    elif len(parts) == 3:
+        day = _parse_int_day(switch, parts[0])
+        month = _parse_month(switch, parts[1])
+        year = _parse_int_year(switch, parts[2])
+        return datetime.date(year, month, day)
+    else:
+        raise GiveUp('Expected a day or date after {!r}, not {!r}'.format(switch, text))
+
 def report(args):
+    """Usage:
+
+        ./report.py [<stuff>]
+
+    <stuff> can be, in any order (although always evaluated left-to-right):
+
+    -h              show this text (also, -help, --help, /?, /help)
+    -h text         show help on the text that can go in the event file (also
+                    works with -help text, etc)
+
+    -for <date>     set the date to be used for "today". Otherwise, today's
+                    actual date is used. The word 'yesterday' is also allowed
+                    as an argument.
+    -start <date>   set the date to be used as the start of the range to be
+                    reported. Otherwise, the day before "today" is used.
+    -end <date>     set the date to be used as the end of the range to be
+                    reported. Otherwise, four weeks after "today" is used.
+
+    -from <date>    synonym for -start <date>
+    -to <date>      synonum for -end <date>
+
+   In each of the switches that take a <date>, it may be any of:
+
+       * <day-name>         - the day of that name that is today or after today
+       * <day>              - that day of this month
+       * <day>-<month-name>
+       * <day>-<month-name>
+       * <day>-<month>-<year>
+       * <day>-<month>-<year>
+
+    -week           set the end date to a week after "today"
+    -month          set the end date to a month after "today"
+    -year           set the end date to a year after "today"
+
+    -cal <year> <month>
+                    print a simple calendar for the given month
+
+    @<word>, ...    only include events that include each given @<word> in
+                    their text (so if a sequence of events are tagged with
+                    @work, and another with @holiday, and the command line
+                    include @work @holiday, then *only* those events will
+                    be reported).
+
+    <filename>      the name of the file to read events from. The default
+                    is "what.txt" in the same directory as this script.
+
+    -tidy           output the event data as it was understood - this can be
+                    useful for "tidying up" an event file, by outputting the
+                    output text to a replacement file. Note, though, that any
+                    comments will be lost, the order will likely be different,
+                    and some subtleties may change.
+    -repr           output the event data with annotations - this is intended
+                    for debugging the interpretation of said data
+    -doctest        run the internal doctests
+    """
 
     filename = None
     show_comments = False
@@ -1544,8 +1745,12 @@ def report(args):
     while args:
         word = args.pop(0)
         if word in ('-h', '-help', '--help', '/?', '/help'):
-            print(__doc__)
-            return
+            if args and args[0] == 'text':
+                page(__doc__)
+                return
+            else:
+                page(report.__doc__)
+                return
         elif word == '-doctest':
             import doctest
             failures, tests = doctest.testmod()
@@ -1558,36 +1763,58 @@ def report(args):
             action = 'tidy'
             # Use a very historical start date to try to sort the output nicely
             start = datetime.date(1900, 1, 1)
+        elif word == '-repr':
+            action = 'repr'
+            # Use a very historical start date to try to sort the output nicely
+            start = datetime.date(1900, 1, 1)
         elif word == '-for':
-            # Take a date and report as if today were that date
-            # Format of date should be as in the file, <year> <month> <day>
-            raise NotImplementedError()
-        elif word == '-calendar':
+            today = get_cmdline_date(word, args)
+        elif word == '-cal':
             # Print a calendar, for the current month or the named month
             # Format of date should be <year> <month>
-            raise NotImplementedError()
-        elif word == '-from':
-            # Report events starting with this date
-            # Format of date should be as in the file, <year> <month> <day>
-            raise NotImplementedError()
-        elif word == '-to':
-            # Report events ending with this date
-            # Format of date should be as in the file, <year> <month> <day>
-            raise NotImplementedError()
+            try:
+                year = args.pop(0)
+            except IndexError as e:
+                raise GiveUp('Expected -cal <year> <month> - missing <year>')
+            try:
+                month = args.pop(0)
+            except IndexError as e:
+                raise GiveUp('Expected -cal <year> <month> - missing <month>')
+            month = _parse_month(word, month)
+            year = _parse_int_year(word, year)
+            calendar.prmonth(year, month)
+            return
+        elif word in ('-start', '-from'):
+            start = get_cmdline_date(word, args)
+        elif word in ('-end' '-to'):
+            end = get_cmdline_date(word, args)
+        elif word == '-week':
+            end = start + datetime.timedelta(days=7)
+        elif word == '-month':
+            try:
+                end = start.replace(day=day, month=start.month+1)
+            except ValueError:
+                end = start.replace(month=1, year=start.year+1)
+        elif word == '-year':
+            end = start.replace(year=start.year+1)
         elif word[0] == '-' and not os.path.exists(word):
-            raise GiveUp('Unexpected switch {:r}'.format(word))
+            raise GiveUp('Unexpected switch {!r}'.format(word))
         elif word[0] == '@':
             at_words.add(word)
         elif not filename:
             filename = word
         else:
-            raise GiveUp('Unexpected argument {:r} (already got'
-                         ' filename {:r}'.format(word. filename))
+            raise GiveUp('Unexpected argument {!r} (already got'
+                         ' filename {!r}'.format(word. filename))
 
     start, yesterday, today, end = determine_dates(start, today, end)
 
     if not filename:
-        filename = 'what.txt'
+        this_file = __file__
+        this_dir = os.path.split(this_file)[0]
+        filename = os.path.join(this_dir, 'what.txt')
+
+    print('Reading events from {!r}'.format(filename))
     try:
         events = parse_file(filename, start)
     except GiveUp as e:
@@ -1599,29 +1826,32 @@ def report(args):
         for event in sorted(events):
             print(str(event))
         return
-
-#       # Output the events for this timespan
-#       for event in sorted(events):
-#           print(repr(event))
+    elif action ==  'repr':
+        # Output the events for this timespan
+        for event in sorted(events):
+            print(repr(event))
+        return
 
     things = find_events(events, start, end, at_words)
 
     prev = None
     spacer = 4+1+3+1+2+1+3+1+1
+    lines = []
     for date, text in sorted(things):
         weekday = date.weekday()
         if prev and weekday < prev:
-            print('{}{}'.format(' '*spacer, '-'*(80-spacer)))
+            lines.append('{}{}'.format(' '*spacer, '-'*(80-spacer)))
         # What order do I *actually* want the date written out in?
         # I think this is perhaps the most useful for looking at nearby
         # dates (when the day and date are most important)
-        print('{} {:2} {} {}, {}'.format(
+        lines.append('{} {:2} {} {}, {}'.format(
             DAYS[date.weekday()],
             date.day,
             MONTH_NAME[date.month],
             date.year,
             text))
         prev = weekday
+    page('\n'.join(lines))
 
     print('\nstart {} .. yesterday {} .. today {} .. end {}'.format(start,
         yesterday, today, end))

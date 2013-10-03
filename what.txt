@@ -144,3 +144,5 @@
 2013 Aug 12, Michael lifeguard course (rescheduled)
 2013 Aug 16, 18:00 (Friday) Andrew Gordon "Universal Party"
 2013 Aug 17, Michael lifeguard course (assessment)
+
+:every Thu, I was born in :year, and am age :age
