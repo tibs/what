@@ -631,15 +631,17 @@ class Event(object):
     def get_dates(self, start, end, at_words=None):
         """Given a start and end date, return those on which we occur.
 
-        Returns a list of tuples of the form (date, text). This will be
-        the empty list if there are no occurrences in the given range.
+        Returns a list of tuples of the form (date, text, event). This will be
+        the empty list if there are no occurrences in the given range. Note
+        that we need to include the text because it may have been altered from
+        the event.text
         """
         # Maybe sanity check our conditions lazily, at this point...
         # ...or maybe not
 
         # If the caller asked for only texts that have particular at-words
         # within them, then we should/can check that first
-        if at_words and not at_words.intersect(self.at_words):
+        if at_words and not at_words.intersection(self.at_words):
             # OK, we don't match
             return []
 
@@ -647,12 +649,14 @@ class Event(object):
 
         if self.repeat_until:
             if self.repeat_until < start:
-                print('repeat until {} is before start {}'
-                      ' - stopping'.format(self.repeat_until, start))
-                return set()
+                #print(self)
+                #print('repeat until {} is before start {}'
+                #      ' - we can ignore it'.format(self.repeat_until, start))
+                return []
             elif self.repeat_until < end:
-                print('repeat until {} is before end {}'
-                      ' - adjusting range'.format(self.repeat_until, end))
+                #print(self)
+                #print('repeat until {} is before end {}'
+                #      ' - adjusting range'.format(self.repeat_until, end))
                 end = self.repeat_until
 
         if start <= self.date <= end:
@@ -712,7 +716,7 @@ class Event(object):
         for date in dates:
             if ':age' in self.colon_words:
                 text = text.replace(':age', str(date.year - self.date.year))
-            things.append((date, text))
+            things.append((date, text, self))
 
         return things
 
@@ -1546,7 +1550,7 @@ def parse_file(filename, start):
     return events
 
 def find_events(events, start, end, at_words=None):
-    """Return a set of (date, text) tuples for the events in our date range.
+    """Return (date, text, event) tuples for the events in our date range.
     """
     things = set()
     for event in events:
@@ -1618,7 +1622,7 @@ def page(text):
 
 def _parse_day(switch, day):
     day_name = day.capitalize()
-    if day_name in DAY_NAMES:
+    if day_name in DAYS:
         date = day_after_date(today, day_name, True)
         return date.day
     try:
@@ -1714,6 +1718,7 @@ def report(args):
 
     -cal <year> <month>
                     print a simple calendar for the given month
+    -today          print out todays date
 
     @<word>, ...    only include events that include each given @<word> in
                     their text (so if a sequence of events are tagged with
@@ -1721,14 +1726,30 @@ def report(args):
                     include @work @holiday, then *only* those events will
                     be reported).
 
+    -count          for the @<words> specified, count how many events contain
+                    them, and report that for each @<word>. This counts the
+                    @<words> in the final list of events, so if we have:
+
+                        :easter Fri 2013, @Eastercon
+                            :for 4 days
+
+                    and do -count over the period containing those dates, we
+                    would expect to see:
+
+                        @eastercon occurs on 4 days
+
     <filename>      the name of the file to read events from. The default
                     is "what.txt" in the same directory as this script.
 
+    -atwords        report on which @<words> are used in the events file.
+    -at_words       synonim for -atwords
+    -at-words       synonim for -atwords
     -tidy           output the event data as it was understood - this can be
                     useful for "tidying up" an event file, by outputting the
                     output text to a replacement file. Note, though, that any
                     comments will be lost, the order will likely be different,
-                    and some subtleties may change.
+                    and some subtleties may change. The default start date
+                    with this command is 01-01-1900.
     -repr           output the event data with annotations - this is intended
                     for debugging the interpretation of said data
     -doctest        run the internal doctests
@@ -1737,7 +1758,7 @@ def report(args):
     filename = None
     show_comments = False
     action = 'report'
-    today = None
+    today = datetime.date.today()
     start = None
     end = None
     at_words = set()
@@ -1769,7 +1790,12 @@ def report(args):
             start = datetime.date(1900, 1, 1)
         elif word == '-for':
             today = get_cmdline_date(word, args)
+        elif word == '-count':
+            action = 'count'
+        elif word in ('-atwords', '-at-words', '-at_words'):
+            action = 'atwords'
         elif word == '-cal':
+            # XXX Refactor into a function
             # Print a calendar, for the current month or the named month
             # Format of date should be <year> <month>
             try:
@@ -1788,6 +1814,10 @@ def report(args):
             start = get_cmdline_date(word, args)
         elif word in ('-end' '-to'):
             end = get_cmdline_date(word, args)
+        elif word == '-today':
+            print('Today is {} {} {} {}, {}'.format(DAYS[today.weekday()],
+                today.day, MONTH_NAME[today.month], today.year, today))
+            return
         elif word == '-week':
             end = start + datetime.timedelta(days=7)
         elif word == '-month':
@@ -1800,7 +1830,7 @@ def report(args):
         elif word[0] == '-' and not os.path.exists(word):
             raise GiveUp('Unexpected switch {!r}'.format(word))
         elif word[0] == '@':
-            at_words.add(word)
+            at_words.add(word.lower())
         elif not filename:
             filename = word
         else:
@@ -1831,28 +1861,74 @@ def report(args):
         for event in sorted(events):
             print(repr(event))
         return
+    elif action == 'atwords':
+        # Report on what @<words> are in use
+        used = set()
+        count = {}
+        for event in events:
+            used.update(event.at_words)
+            for word in event.at_words:
+                count[word] = count.setdefault(word, 0) + 1
+        print('The following @<words> are used in {}:'.format(filename))
+        length = 0
+        for word in used:
+            if len(word) > length:
+                length = len(word)
+        format1 = '  {{:{}s}}     once'.format(length)
+        format2 = '  {{:{}s}} {{:3d}} time{{}}'.format(length)
+        for name in sorted(used):
+            times = count[name]
+            if times == 1:
+                print(format1.format(name))
+            else:
+                print(format2.format(name, times, '' if times==1 else 's'))
 
     things = find_events(events, start, end, at_words)
 
-    prev = None
-    spacer = 4+1+3+1+2+1+3+1+1
-    lines = []
-    for date, text in sorted(things):
-        weekday = date.weekday()
-        if prev and weekday < prev:
-            lines.append(' {}{}'.format(' '*spacer, '-'*(80-spacer)))
-        # What order do I *actually* want the date written out in?
-        # I think this is perhaps the most useful for looking at nearby
-        # dates (when the day and date are most important)
-        lines.append('{}{} {:2} {} {}, {}'.format(
-            '*' if date == today else ' ',
-            DAYS[date.weekday()],
-            date.day,
-            MONTH_NAME[date.month],
-            date.year,
-            text))
-        prev = weekday
-    page('\n'.join(lines))
+    if action == 'count':
+        # XXX This really should be a separate function
+        if not at_words:
+            raise GiveUp('-count expects at least one @<word> to count days for')
+        length = 0
+        for word in at_words:
+            if len(word) > length:
+                length = len(word)
+        count = {}
+        for word in at_words:
+            count[word] = 0
+        for date, text, event in sorted(things):
+            for word in at_words:
+                if word in event.at_words:
+                    count[word] += 1
+        # Is this really the best way to do this?
+        format = '{{:{}s}} occurs on {{}} day{{}} within {{}} .. {{}}'.format(length)
+        keys = sorted(count.keys())
+        for word in keys:
+            value = count[word]
+            print(format.format(word, value, '' if value==1 else 's',
+                                start, end))
+
+    elif action == 'report':
+        # XXX This really should be a separate function by now
+        prev = None
+        spacer = 4+1+3+1+2+1+3+1+1
+        lines = []
+        for date, text, event in sorted(things):
+            weekday = date.weekday()
+            if prev and weekday < prev:
+                lines.append(' {}{}'.format(' '*spacer, '-'*(80-spacer)))
+            # What order do I *actually* want the date written out in?
+            # I think this is perhaps the most useful for looking at nearby
+            # dates (when the day and date are most important)
+            lines.append('{}{} {:2} {} {}, {}'.format(
+                '*' if date == today else ' ',
+                DAYS[date.weekday()],
+                date.day,
+                MONTH_NAME[date.month],
+                date.year,
+                text))
+            prev = weekday
+        page('\n'.join(lines))
 
     print('\nstart {} .. yesterday {} .. today {} .. end {}'.format(start,
         yesterday, today, end))
@@ -1862,7 +1938,7 @@ if __name__ == '__main__':
     try:
         report(args)
     except GiveUp as e:
-        print(e)
+        print('ERROR: {}'.format(e))
         sys.exit(1)
 
 # vim: set tabstop=8 softtabstop=4 shiftwidth=4 expandtab:
