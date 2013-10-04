@@ -125,15 +125,20 @@ modifiers are:
       not occur on this particular day. This is the only colon word to take
       a ", <text>" after its date, ALTHOUGH THAT MAY CHANGE IN FUTURE VERSIONS
       OF THE SCRIPT.
+      **Ideally, it would also allow <month> <day>, eliding the year.**
     * :until <year> <mon> <day> [<dat>] -- the preceding event continues until
       this date. If this date does not exactly match the recurrence of the
       preceding event, then the last occurrence is the one before this date.
+      Note that this does *not* itself cause repetition - it just limits
+      whatever repetition is (also) specified.
+       **Ideally, it would also allow <month> <day>, eliding the year.**
     * :weekly -- the preceding event occurs weekly, i.e., every week on the
       same day.
     * :fortnightly -- the preceding event occurs fortnightly, i.e., every
       other week on the same day.
     * :monthly -- the preceding event occurs monthly, i.e., every month on the
       same date.
+    * :yearly -- the preceding event occurs yearly, on the same date.
     * :every <count> days -- the preceding event occurs every <count> days,
       starting on the original date. ':every 7 days' is thus the same as
       ':weekly'. I apologise in advance for ':every 1 days'.
@@ -1199,6 +1204,15 @@ def colon_condition_monthly(colon_word, event, words, start):
     # Which is just the same as repeating on the same day each month
     event.repeat_on_Nth_of_month.add(event.date.day)
 
+def colon_condition_yearly(colon_word, event, words, start):
+    """Repeating yearly
+
+    'words' should be empty.
+
+    Applies to the preceding date line
+    """
+    event.repeat_yearly = True
+
 def colon_condition_every(colon_word, event, words, start):
     """Repeat every <something> days
 
@@ -1234,10 +1248,14 @@ def colon_condition_for(colon_word, event, words, start):
         raise GiveUp('Expected:\n'
                      '  :for <count> {}\n'
                      'not {!r}'.format(what, colon_what(colon_word, words)))
+    # Repeat daily until told to stop...
+    event.repeat_every_N_days.add(1)
     if what == 'days':
-        until = event.date + datetime.timedelta(days=count)
+        until = event.date + datetime.timedelta(days=count-1) # including THIS day
     else:
         # Hah - weekdays only
+        if 0 <= start.weekday() <= 5:       # we're a weekday
+            count -= 1                      # so we also count
         one_day = datetime.timedelta(days=1)
         until = event.date
         while count > 0:
@@ -1276,6 +1294,7 @@ colon_condition_methods = {':except': colon_condition_except,
                            ':weekly': colon_condition_weekly,
                            ':fortnightly': colon_condition_fortnightly,
                            ':monthly': colon_condition_monthly,
+                           ':yearly': colon_condition_yearly,
                            ':every': colon_condition_every,
                            ':for': colon_condition_for,
                           }
