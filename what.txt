@@ -1,85 +1,25 @@
-# -----------------------------------------------------------------------------
-# Birthdays
-1960* Feb 18, @Birthday: @Tibs is :age, born in :year
-1958* Dec 28, @Birthday: @Joan is :age, born in :year
-1996* Apr  2, @Birthday: @Michael is :age, born in :year
-1998* Dec 26, @Birthday: @Thomas is :age, born in :year
-
-# -----------------------------------------------------------------------------
-# Holidays
-# 2013 Jan  2, @Holiday -3/0 New Year
-# 2013 Mar 27, @Holiday -2/0 Thomas LAMDA exam
-# 2013 Apr  4, @Holiday -1/0 London
-# 2013 Apr  8..11, @Holiday 4days 4/25 School Holiday
-# 2013 Jun  6, 5/25 @Holiday London, museums, lost property
-2013 Jun 28, 6/25 @Holiday BT Engineer 8am-1pm
-2013 Jul 17, 7/25 @Holiday ee fibre installation
-2013 Jul 26, 8/25 @Holiday Folk Festival
-2013 Aug  2, 9/25 @Holiday Thomas Stagecoach show
-2013 Aug  9, 10/25 @Holiday Thomas Stagecoach show
-2013 Aug 19, 11/25 @Holiday Consulting with Netherhall (probably)
-2013 Aug 27, 12/25 @Holiday
-  :for 4 days
-2013 Aug 28, 13/25 Holiday
-2013 Aug 29, 14/25 Holiday
-2013 Aug 30, 15/25 Holiday
-2013 Sep 20, 16/25 Holiday PyConUK 2013 (20-23rd)
-
-# And maybe:
-2013 Dec 23, 21/25 Mon @Holiday before Christmas
-2013 Dec 24, 22/25 Tue @Holiday before Christmas (Christmas Eve)
-2013 Dec 28, 23/25 Fri @Holiday after Christmas
-2013 Dec 30, 24/25 Mon @Holiday after Christmas
-2013 Dec 31, 25/25 Mon @Holiday after Christmas
-
-# School dates, from http://www.netherhall.org/parents/key-dates-and-times/
-# and http://netherhallsixthform.com/students/term-dates/
-2013 Jul 23, Summer Term ends
-2013 Aug 15, 10:00 AS results, Atrium Building
-2013 Sep  3, Baker day
-2013 Sep  4, Autumn Term starts (Thomas)
-2013 Sep  6, 08:30, Autumn Term starts (Michael)
-2013 Oct 17, Baker day
-2013 Oct 28, Half Term holiday starts
-2013 Nov  1, Half Term holiday ends
-2013 Dec 20, Autumn Term ends
-2014 Jan  7, Spring Term starts
-2014 Feb 14, Baker day
-2014 Feb 17, Half Term holiday starts
-2014 Feb 21, Half Term holiday ends
-2014 Apr 04, Spring Term ends
-2014 Apr 22, Baker day
-2014 Apr 23, Summer Term starts
-2014 May 26, Half Term holiday starts
-2014 May 30, Half Term holiday ends
-2014 Jul 23, Summer Term ends
-
-# -----------------------------------------------------------------------------
-# Not forgetting Public Holidays
-##m=Jan & !(w=Sat | w=Sun) & a=1, New Year's Day
-##e=2, Easter Friday
-##e=0-1, Easter Monday
+1960* Oct  9, @Birthday: @Someone is :age, born in :year
 
 # From https://www.gov.uk/bank-holidays
-2013 Aug 26, PubHol: Mon Summer bank holiday
-2013 Dec 25, PubHol: Wed Christmas Day
-2013 Dec 26, PubHol: Thu Boxing Day
-2014 Jan  1, PubHol: Wed New Year’s Day
-2014 Apr 18, PubHol: Fri Good Friday
-2014 Apr 21, PubHol: Mon Easter Monday
-2014 May  5, PubHol: Mon Early May bank holiday
-2014 May 26, PubHol: Mon Spring bank holiday
-2014 Aug 25, PubHol: Mon Summer bank holiday
-2014 Dec 25, PubHol: Thu Christmas Day
-2014 Dec 26, PubHol: Fri Boxing Day
-2015 Jan  1, PubHol: Thu New Year’s Day
-2015 Apr  3, PubHol: Fri Good Friday
-2015 Apr  6, PubHol: Mon Easter Monday
-2015 May  4, PubHol: Mon Early May bank holiday
-2015 May 25, PubHol: Mon Spring bank holiday
-2015 Aug 31, PubHol: Mon Summer bank holiday
-2015 Dec 25, PubHol: Fri Christmas Day
-2015 Dec 28, PubHol: Mon Boxing Day (substitute day)
+2013 Aug 26 Mon, @pubhol Summer bank holiday
+2013 Dec 25 Wed, @pubhol Christmas Day
+2013 Dec 26 Thu, @pubhol Boxing Day
+2014 Jan  1 Wed, @pubhol New Year’s Day
+:easter Fri 2014, @pubhol Good Friday
+:easter Mon 2014, @pubhol Easter Monday
+2014 May  5 Mon, @pubhol Early May bank holiday
+2014 May 26 Mon, @pubhol Spring bank holiday
+2014 Aug 25 Mon, @pubhol Summer bank holiday
+2014 Dec 25 Thu, @pubhol Christmas Day
+2014 Dec 26 Fri, @pubhol Boxing Day
+2015 Jan  1 Thu, @pubhol New Year’s Day
+2015 Apr  3 Fri, @pubhol Good Friday
+2015 Apr  6 Mon, @pubhol Easter Monday
+2015 May  4 Mon, @pubhol Early May bank holiday
+2015 May 25 Mon, @pubhol Spring bank holiday
+2015 Aug 31 Mon, @pubhol Summer bank holiday
+2015 Dec 25 Fri, @pubhol Christmas Day
+2015 Dec 28 Mon, @pubhol Boxing Day (substitute day)
 
 # -----------------------------------------------------------------------------
 # Regular events
@@ -88,62 +28,19 @@
 :every dec 25, Christmas Day
 :every dec 26, Boxing Day
 
-:every Thu, 17:00 @Thomas singing lesson 
+:every Thu, 17:00 @Singing lesson 
   :except 2013 Sep 19, Doing something else
-:first Tue, Joan Ipswich
-:third Tue, Joan Ipswich
+
+:first Tue, @Ipswich
+:third Tue, @Ipswich
 :first Tue, 19:30 CamPUG
 
 # Full backups happen overnight on the first Saturday of each month
-:first Sat, Full Backup
+:first Sat, @work Full Backup
 
 # -----------------------------------------------------------------------------
 # And actual events
+2013 Oct 25 Fri, 10:00..17:00, Newmarket (Christmas) Craft Fair
+     :for 2 days
+2013 Oct 27 Sun, 10:00..16:00, Newmarket (Christmas) Craft Fair
 
-2013 Jun 11, My first "when" entry -- nb: git clone https://github.com/bcrowell/when.git
-2013 Jun 18, 17:00 Thomas audition at Stagecoach
-2013 Jun 19, 18:00 Netherhall - Michael's art show, and general arts event
-2013 Jun 28, 08:00 - 13:00, OpenReach engineer (BT phone)
-
-2013 Jul  2, 17:00 @Thomas singing lesson (rescheduled)
-2013 Jul  2, 18:30 - 20:30, Joan: Transitions, discuss fruit harvest project at CB2 Bistro
-2013 Jul  4, 17:00 Singing lesson canceled
-2013 Jul  5, 17:30, SJ barbeque
-2013 Jul  6, 09:00 - 14:00, Stagecoach rehearsals, Coleridge
-2013 Jul  7, 09:30, Stagecoach rehearsals, Corn Exchange
-2013 Jul  7, 17:30 Stagecoach at Corn Exchange
-2013 Jul  8, RRW in USA 8th-12th
-2013 Jul 11, 17:00 Singing lesson canceled
-2013 Jul 15, Bisley filing cabinet should be delivered this week at latest
-2013 Jul 15, RRW at 3C doing tests 15th-18th
-2013 Jul 15, Thomas Work Shadowing
-2013 Jul 16, 08:00-13:00, BT engineer for phone
-2013 Jul 16, 18:00-19:30, Gifted and Talented Evening (Thomas)
-2013 Jul 16, Bisley will let us know when the filing cabinet will be delivered, so ring them if the phone isn't working
-2013 Jul 17, 08:00-13:00 ee fibre installation
-2013 Jul 17, 14:00-16:00 Bisley deliver filing cabinet
-2013 Jul 17, period 5, Thomas Science Exam (OCR Twenty First Century Science (Science A), C1 Air Quality, B1 You and your Genes, P1 Earth in the Universe)
-2013 Jul 20, 12:00, collect glasses
-2013 Jul 20, 14:30 onwards, Kari and Phil party
-2013 Jul 21, RRW working at home, 21st-5th Aug
-2013 Jul 21, Richard gets his kittens
-2013 Jul 22, Last Monday that St Giles does morning tea this year
-2013 Jul 25, 16:10, hygienist and dentist
-
-2013 Aug  6, RRW probably working at home, 6th-9th
-2013 Aug 12, RRW should definitely be back in the office
-2013 Aug 15, 10:00 A-level results
-
-2013 Sep  3, Working at TeraView
-2013 Sep  3, Baker day
-2013 Sep  6, Year 13 enrolment day: 8.30-8.45 Registration, Period 1 Tutor Period, then lessons
-2013 Sep  9, 17:00-20:00 Stagecoach/Her Majesty's rehearsals start
-#(w=Mon), 17:00-20:00 Stagecoach/Her Majesty's rehearsal
-2013 Sep 20, PyConUK 2013 (20-23rd)
-
-2013 Aug 11, Quilt Show, Birmingham NEC
-2013 Aug 12, Michael lifeguard course (rescheduled)
-2013 Aug 16, 18:00 (Friday) Andrew Gordon "Universal Party"
-2013 Aug 17, Michael lifeguard course (assessment)
-
-:every Thu, I was born in :year, and am age :age

@@ -1835,8 +1835,8 @@ def report(args):
                     This can be useful if the file is somewhere unobvious.
 
     -atwords        report on which @<words> are used in the events file.
-    -at_words       synonim for -atwords
-    -at-words       synonim for -atwords
+    -at_words       synonym for -atwords
+    -at-words       synonym for -atwords
     -tidy           output the event data as it was understood - this can be
                     useful for "tidying up" an event file, by outputting the
                     output text to a replacement file. Note, though, that any
