@@ -6,6 +6,9 @@
 from __future__ import division
 from __future__ import print_function
 
+# -----------------------------------------------------------------------------
+# Help texts
+
 usage_text = """\
     ./report.py [<stuff>]
 
@@ -320,10 +323,16 @@ try to get the features I wanted added in? Perhaps, but in the end writing
 this program myself was more fun...
 """
 
+# -----------------------------------------------------------------------------
+# At last, some code
+
 import calendar
 import datetime
 import os
+import platform
 import re
+import shlex
+import struct
 import subprocess
 import sys
 
@@ -1831,6 +1840,18 @@ def report_atword_days(things, at_words, start, end):
         print(format.format(word, value, '' if value==1 else 's',
                             start, end))
 
+# The octal forms are more traditional - this is old VT100 stuff
+ANSI_BOLD='\033[1m'
+ANSI_NORMAL='\033[0m'
+
+def bold(text):
+    if sys.platform == 'win32':
+        # It's non-trivial, so we don't try
+        return text
+    else:
+        # We're going to assume ANSI escape codes work...
+        return '{}{}{}'.format(ANSI_BOLD, text, ANSI_NORMAL)
+
 def report_events(things, today):
     """Report on the days given us.
     """
@@ -1844,22 +1865,186 @@ def report_events(things, today):
         # What order do I *actually* want the date written out in?
         # I think this is perhaps the most useful for looking at nearby
         # dates (when the day and date are most important)
-        lines.append('{}{} {:2} {} {}, {}'.format(
-            '*' if date == today else ' ',
-            DAYS[date.weekday()],
-            date.day,
-            MONTH_NAME[date.month],
-            date.year,
-            text))
+        date_str = '{} {:2} {} {}'.format(DAYS[date.weekday()], date.day,
+                MONTH_NAME[date.month], date.year)
+        if date == today:
+            date_str = bold(date_str)
+        lines.append('{}{}, {}'.format('*' if date == today else ' ',
+                                       date_str, text))
         prev = week_number
     page('\n'.join(lines))
 
-def normalise_dir(dir):
-    dir = os.path.expanduser(dir)
-    dir = os.path.abspath(dir)
-    dir = os.path.normpath(dir)     # remove double slashes, etc.
-    return dir
+# -----------------------------------------------------------------------------
+# Paging
 
+# The following is essentially take from https://gist.github.com/jtriley/1108174
+# which was originally worked out on
+# http://stackoverflow.com/questions/566746/how-to-get-console-window-width-in-python
+# The 'tput' code is originally from
+# http://stackoverflow.com/questions/263890/how-do-i-find-the-width-height-of-a-terminal-window
+
+import os
+import shlex
+import struct
+import platform
+import subprocess
+
+def _get_terminal_size_tput():
+    try:
+        cols = int(subprocess.check_call(shlex.split('tput cols')))
+        rows = int(subprocess.check_call(shlex.split('tput lines')))
+        return (cols, rows)
+    except Exception:
+        return None
+
+def _get_terminal_size_linux():
+    def ioctl_GWINSZ(fd):
+        try:
+            import fcntl, termios
+            cr = struct.unpack('hh', fcntl.ioctl(fd, termios.TIOCGWINSZ, '1234'))
+            return cr
+        except Exception:
+            return None
+    cr = ioctl_GWINSZ(0) or ioctl_GWINSZ(1) or ioctl_GWINSZ(2)
+    if not cr:
+        try:
+            fd = os.open(os.ctermid(), os.O_RDONLY)
+            cr = ioctl_GWINSZ(fd)
+            os.close(fd)
+        except Exception:
+            pass
+    if not cr:
+        try:
+            cr = (os.environ['LINES'], os.environ['COLUMNS'])
+        except Exception:
+            return None
+    return int(cr[1]), int(cr[0])
+
+def _get_terminal_size_windows():
+    try:
+        from ctypes import windll, create_string_buffer
+        # stdin handle is -10
+        # stdout handle is -11
+        # stderr handle is -12
+        h = windll.kernel32.GetStdHandle(-12)
+        csbi = create_string_buffer(22)
+        res = windll.kernel32.GetConsoleScreenBufferInfo(h, csbi)
+        if res:
+            (bufx, bufy, curx, cury, wattr,
+             left, top, right, bottom,
+             maxx, maxy) = struct.unpack("hhhhHhhhhhh", csbi.raw)
+            sizex = right - left + 1
+            sizey = bottom - top + 1
+            return sizex, sizey
+    except Exception:
+        return None
+
+def get_terminal_size(use_default=False):
+    """Return the width and height of the terminal/console
+
+    Should work on Linux, OS X, Windows and cygwin on Windows
+    """
+    current_os = platform.system()
+    tuple_xy = None
+    if current_os == 'Windows':
+        tuple_xy = _get_terminal_size_windows()
+        if tuple_xy is None:
+            # Window's python in cygwin's xterm needs to be specific
+            tuple_xy = _get_terminal_size_tput()
+    if current_os in ['Linux', 'Darwin'] or current_os.startswith('CYGWIN'):
+        tuple_xy = _get_terminal_size_linux()
+    if tuple_xy is None:
+        if use_default:
+            tuple_xy = (80, 25)
+        else:
+            return None, None
+    return tuple_xy
+
+# Thanks to
+# http://stackoverflow.com/questions/3523174/raw-input-in-python-without-pressing-enter
+# http://code.activestate.com/recipes/134892-getch-like-unbuffered-character-reading-from-stdin/ 
+def read_char_windows(echo=True):
+    "Get a single character on Windows."
+    while msvcrt.kbhit():
+        msvcrt.getch()
+    ch = msvcrt.getch()
+    while ch in b'\x00\xe0':
+        msvcrt.getch()
+        ch = msvcrt.getch()
+    if echo:
+        msvcrt.putch(ch)
+    return ch.decode()
+
+def read_char_unix(echo=True):
+    import sys, tty, termios
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+        if ch == '\x03':
+            raise KeyboardInterrupt()
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    if echo:
+        sys.stdout.write(ch)
+    return ch
+
+def prompt(prompt):
+    try:
+        sys.stdout.write(prompt)
+        if sys.platform == 'win32':
+            return read_char_windows(False)
+        else:
+            return read_char_unix(False)
+    except Exception as e:
+        sys.stdout.write('\n')      # since we're missing one
+        print(e.__class__.__name__, e)
+        raise
+
+def page(text):
+    width, height = get_terminal_size()
+    if height is None:
+        # If we can't figure out the height, we can't really do any sensible
+        # paging - just give up
+        print(text)
+        return
+
+    lines = text.split('\n')
+    num_lines = len(lines)
+    if num_lines <= height:
+        print(text)
+        return
+
+    start = 0
+    # Leave one line for the prompt at the bottom
+    display_lines = height - 1
+    # But when we page down, we also want to keep one line of the previous page
+    page_lines = height - 2
+
+    while True:
+        sub = lines[start:start+display_lines]
+        print('\n'.join(sub))
+        reply = prompt('Paging [<space> for next page, <return> for next line,'
+                       ' b for back, q for quit]')
+        sys.stdout.write('\n')
+        if reply == 'q':
+            return
+        elif reply in ('\r', '\n'):
+            start += 1
+        elif reply == 'b':
+            start -= page_lines
+            if start < 0:
+                start = 0
+        elif reply == ' ':
+            start += page_lines
+            if start > num_lines - page_lines:
+                start = num_lines - page_lines
+        else:
+            sys.stdout.write('Unrecognised reply {!r}'.format(reply))
+
+# -----------------------------------------------------------------------------
+# Command line
 def print_calendar_month(switch, args):
     try:
         year = args.pop(0)
@@ -1872,32 +2057,6 @@ def print_calendar_month(switch, args):
     month = _parse_month(word, month)
     year = _parse_int_year(word, year)
     calendar.prmonth(year, month)
-
-def page(text):
-    sys.stdout.flush()
-    sys.stderr.flush()
-    pager = os.environ.get('PAGER', 'more')
-    try:
-        path = os.environ.get('PATH', os.defpath)
-        path = path.split(os.pathsep)
-        for locn in path:
-            locn = normalise_dir(locn)
-            prog = os.path.join(locn, pager)
-            if os.path.exists(prog):
-                try:
-                    proc = subprocess.Popen([prog],
-                                            stdin=subprocess.PIPE,
-                                            stderr=subprocess.STDOUT)
-                    proc.communicate(text)
-                    return
-                except OSError:
-                    # We're not allowed to run it, or some other problem,
-                    # so look for another candidate
-                    continue
-        # And if nothing else works, just print it out
-        print(text)
-    except IOError: # For instance, a pipe error due to "q" at the prompt
-        pass
 
 def _parse_int_day(switch, day):
     try:
