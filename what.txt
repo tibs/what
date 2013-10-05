@@ -1,9 +1,8 @@
-1960* Oct  9, @Birthday: @Someone is :age, born in :year
+1980* Oct  9, @Birthday: @Alfred is :age, born in :year
+1983* Jan 29, @Birthday: @Bethany is :age, born in :year
+2001* Oct  7, @Birthday: @Charles is :age, born in :year
 
 # From https://www.gov.uk/bank-holidays
-2013 Aug 26 Mon, @pubhol Summer bank holiday
-2013 Dec 25 Wed, @pubhol Christmas Day
-2013 Dec 26 Thu, @pubhol Boxing Day
 2014 Jan  1 Wed, @pubhol New Year’s Day
 :easter Fri 2014, @pubhol Good Friday
 :easter Mon 2014, @pubhol Easter Monday
@@ -12,14 +11,6 @@
 2014 Aug 25 Mon, @pubhol Summer bank holiday
 2014 Dec 25 Thu, @pubhol Christmas Day
 2014 Dec 26 Fri, @pubhol Boxing Day
-2015 Jan  1 Thu, @pubhol New Year’s Day
-2015 Apr  3 Fri, @pubhol Good Friday
-2015 Apr  6 Mon, @pubhol Easter Monday
-2015 May  4 Mon, @pubhol Early May bank holiday
-2015 May 25 Mon, @pubhol Spring bank holiday
-2015 Aug 31 Mon, @pubhol Summer bank holiday
-2015 Dec 25 Fri, @pubhol Christmas Day
-2015 Dec 28 Mon, @pubhol Boxing Day (substitute day)
 
 # -----------------------------------------------------------------------------
 # Regular events
@@ -28,18 +19,19 @@
 :every dec 25, Christmas Day
 :every dec 26, Boxing Day
 
-:every Thu, 17:00 @Singing lesson 
-  :except 2013 Sep 19, Doing something else
+:every Thu, 17:00 @Charles Singing lesson 
+  :except 2013 Oct 3, Doing something else
 
-:first Tue, @Ipswich
-:third Tue, @Ipswich
-:first Tue, 19:30 CamPUG
+:first Tue, @Bethany Ipswich
+:third Tue, @Bethany Ipswich
+:first Tue, 19:30 @Alfred Python User Group
 
 # Full backups happen overnight on the first Saturday of each month
-:first Sat, @work Full Backup
+:first Sat, @Alfred Full Backup
 
 # -----------------------------------------------------------------------------
 # And actual events
+2013 Oct  2 Wed, Daniel visiting
 2013 Oct 25 Fri, 10:00..17:00, Newmarket (Christmas) Craft Fair
      :for 2 days
 2013 Oct 27 Sun, 10:00..16:00, Newmarket (Christmas) Craft Fair

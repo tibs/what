@@ -17,43 +17,54 @@ def indent(text, indentation='  '):
 
 with open(os.path.join(this_dir, 'readme.rst'), 'w') as fd:
 
-        fd.write('what.py - a simple event reporting script\n'
+        fd.write('=========================================\n'
+                 'what.py - a simple event reporting script\n'
                  '=========================================\n\n')
 
         fd.write('Usage\n'
-                 '-----\n')
-
-        fd.write(what.report.__doc__)
+                 '=====\n'
+                 '::\n\n')
+        fd.write(indent(what.usage_text))
         fd.write('\n')
 
         fd.write('The contents of the event file\n'
-                 '------------------------------\n')
-
-        fd.write(what.__doc__)
+                 '==============================\n')
+        fd.write(what.file_content_text)
         fd.write('\n')
 
         fd.write('Examples\n'
-                 '--------\n')
+                 '========\n')
+
+        fd.write('Given the following event file::\n\n')
+        fd.write(indent(open(os.path.join(this_dir, 'what.txt')).read()))
+        fd.write('\n')
+        fd.write("and assuming that today's date is 3rd October 2013,"
+                 "we see:\n")
 
         # Note we force the date used for "today", but don't report that
-        text = check_output(['./what.py', '-for', '4-oct-2013', '-today'])
+        text = check_output(['./what.py', '-for', '3-oct-2013', '-today'])
         fd.write('::\n\n  $ ./what.py -today\n')
         fd.write(indent(text))
         fd.write('\n\n')
 
-        text = check_output(['./what.py', '-for', '4-oct-2013'])
+        text = check_output(['./what.py', '-for', '3-oct-2013'])
         fd.write('::\n\n  $ ./what.py\n')
         fd.write(indent(text))
         fd.write('\n')
 
-        text = check_output(['./what.py', '-for', '4-oct-2013', '@birthday', '@pubhol'])
+        text = check_output(['./what.py', '-for', '3-oct-2013', '@birthday', '@pubhol'])
         fd.write('::\n\n  $ ./what.py @birthday @pubhol\n')
         fd.write(indent(text))
         fd.write('\n')
 
-        text = check_output(['./what.py', '-for', '4-oct-2013', '-atwords'])
+        text = check_output(['./what.py', '-for', '3-oct-2013', '-atwords'])
         fd.write('::\n\n  $ ./what.py -atwords\n')
         fd.write(indent(text))
+        fd.write('\n')
+
+        fd.write('Other tools I considered\n'
+                 '========================\n')
+        fd.write(what.related_text)
         fd.write('\n')
 
 # vim: set tabstop=8 softtabstop=4 shiftwidth=4 expandtab:
