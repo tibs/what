@@ -136,10 +136,6 @@ matters. A <colon-date> may be any of:
 * :easter <index> <year>, where <index> is relative to Easter Sunday, so
   ':easter -1 2013' would mean the same as ':easter Sat 2013'.
 
-(Including the year on :easter makes it clearer what is intended - a mechanism
-for specifying "every easter" can be added later if needed, maybe just by
-allowing the year to be omitted.)
-
 Also, it is possible to select a day before or after a particular event,
 using one of:
 
@@ -202,27 +198,19 @@ Continuation lines - qualifying the event
 -----------------------------------------
 Continuation lines follow date lines, and are indented. The amount of
 indentaton is not significant, and is not checked (although it looks nicer if
-it matches). A continuation line must start with a <colon-word>. Future
-versions of the script *may* allow multiple colon-words on the same line, but
-this version does not. The <colon-words> in continuation lines modify the
-preceding date line, and the available modifiers are:
+it matches). A continuation line must start with a <colon-word>.The
+<colon-words> in continuation lines modify the preceding date line, and the
+available modifiers are:
 
 * :except <year> <mon> <day> [<dat>][, <reason>] -- the preceding event
   does not occur on this particular day. This is the only colon word to
-  take a ", <text>" after its date, ALTHOUGH THAT MAY CHANGE IN FUTURE
-  VERSIONS OF THE SCRIPT. At the moment, that text (<reason>) is just
-  discarded.
-
-  **Ideally, it would also allow <month> <day>, eliding the year.**
-
+  take a ", <text>" after its date. At the moment, that text (<reason>) is
+  just discarded.
 * :until <year> <mon> <day> [<dat>] -- the preceding event continues until
   this date. If this date does not exactly match the recurrence of the
   preceding event, then the last occurrence is the one before this date.
-  Note that this does *not* itself cause repetition - it just limits
-  whatever repetition is (also) specified.
-
-  **Ideally, it would also allow <month> <day>, eliding the year.**
-
+  Note that if you specify ':until' but don't specify an actual repeat
+  frequency, it will assume daily.
 * :weekly -- the preceding event occurs weekly, i.e., every week on the
   same day.
 * :fortnightly -- the preceding event occurs fortnightly, i.e., every
@@ -240,6 +228,31 @@ preceding date line, and the available modifiers are:
   original date is a Sat or Sun, it/they won't count to the total. Works
   exactly as if it were a combination of ':for <n> days' with the internal
   weekend days excluded using ':except <weekend-day>'.
+
+Possible future developments
+----------------------------
+It might be nice if other conditions (than ':except') also allowed a text
+part in their line. It might also be nice if something were done with this
+text (although what I'm not sure - for ':except' maybe one would have a
+command line switch that enabled reporting that an event was *not* happening,
+giving the <reason>).
+
+It would be nice if ':except' and ':until' would also accept a date of the
+form <mon> <day>, and work out the year based upon the year of the date line
+that they are qualifying.
+
+It would be nice if one could use ':easter' without a qualifying year, to
+mean a repeating Easter event - at the moment each individual Easter needs
+to be specified.
+
+It might be nice to allow more than one condition on a continuation line,
+perhaps with some separating punctuation - although I'm not 100% sure of this
+one.
+
+On the command line, it might be nice if one said '-for <day> <mon>' or
+'-for <day> <mon> <year>' instead of needing all the hyphens inside the
+dates. That would, of course, make command line parsing that bit more
+complicated.
 
 Examples
 ========
@@ -267,7 +280,7 @@ Given the following event file::
   :every dec 26, Boxing Day
   
   :every Thu, 17:00 @Charles Singing lesson 
-    :except 2013 Sep 19, Doing something else
+    :except 2013 Oct 3, Doing something else
   
   :first Tue, @Bethany Ipswich
   :third Tue, @Bethany Ipswich
@@ -296,7 +309,6 @@ and assuming that today's date is 3rd October 2013,we see:
   $ ./what.py
   Reading events from './what.txt'
    Wed  2 Oct 2013, Daniel visiting
-  *Thu  3 Oct 2013, 17:00 @Charles Singing lesson
    Sat  5 Oct 2013, @Alfred Full Backup
                     ---------------------------------------------------------------
    Mon  7 Oct 2013, @Birthday: @Charles is 12, born in 2001
@@ -312,6 +324,7 @@ and assuming that today's date is 3rd October 2013,we see:
    Sun 27 Oct 2013, 10:00..16:00, Newmarket (Christmas) Craft Fair
                     ---------------------------------------------------------------
    Thu 31 Oct 2013, 17:00 @Charles Singing lesson
+  
   start 2013-10-02 .. yesterday 2013-10-02 .. today 2013-10-03 .. end 2013-10-31
   
 ::
@@ -320,6 +333,7 @@ and assuming that today's date is 3rd October 2013,we see:
   Reading events from './what.txt'
    Mon  7 Oct 2013, @Birthday: @Charles is 12, born in 2001
    Wed  9 Oct 2013, @Birthday: @Alfred is 33, born in 1980
+  
   start 2013-10-02 .. yesterday 2013-10-02 .. today 2013-10-03 .. end 2013-10-31
   
 ::

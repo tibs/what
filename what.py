@@ -71,6 +71,9 @@ In each of the switches that take a <date>, it may be any of:
                 EDITOR environment variable, or 'vim' by default.
                 This can be useful if the file is somewhere unobvious.
 
+-nobold         Don't try to enbolden the current date. Useful if piping
+                to a file.
+
 -atwords        report on which @<words> are used in the events file.
 -at_words       synonym for -atwords
 -at-words       synonym for -atwords
@@ -1852,7 +1855,7 @@ def bold(text):
         # We're going to assume ANSI escape codes work...
         return '{}{}{}'.format(ANSI_BOLD, text, ANSI_NORMAL)
 
-def report_events(things, today):
+def report_events(things, today, enbolden=True):
     """Report on the days given us.
     """
     prev = None
@@ -1867,7 +1870,7 @@ def report_events(things, today):
         # dates (when the day and date are most important)
         date_str = '{} {:2} {} {}'.format(DAYS[date.weekday()], date.day,
                 MONTH_NAME[date.month], date.year)
-        if date == today:
+        if date == today and enbolden:
             date_str = bold(date_str)
         lines.append('{}{}, {}'.format('*' if date == today else ' ',
                                        date_str, text))
@@ -2112,6 +2115,7 @@ def report(args):
     today = datetime.date.today()
     start = None
     end = None
+    enbolden = True
     at_words = set()
 
     while args:
@@ -2144,6 +2148,8 @@ def report(args):
             start = datetime.date(1900, 1, 1)
         elif word == '-for':
             today = get_cmdline_date(word, args)
+        elif word == '-nobold':
+            enbolden = False
         elif word == '-edit':
             action = 'edit'
         elif word == '-count':
@@ -2223,7 +2229,7 @@ def report(args):
         report_atword_days(things, at_words, start, end)
 
     elif action == 'report':
-        report_events(things, today)
+        report_events(things, today, enbolden)
 
     print('\nstart {} .. yesterday {} .. today {} .. end {}'.format(start,
         yesterday, today, end))
