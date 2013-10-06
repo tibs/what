@@ -42,11 +42,12 @@ Usage
                   print a simple calendar for the given month
   -today          print out todays date
   
-  @<word>, ...    only include events that include each given @<word> in
-                  their text (so if a sequence of events are tagged with
-                  @work, and another with @holiday, and the command line
-                  include @work @holiday, then *only* those events will
-                  be reported).
+  @<word>         only include events that include this @<word> in their text.
+                  Multiple @<words> may be specified. So if some events are
+                  tagged with @work, and some with @holiday, and the command line
+                  includes @work and @holiday, then only events that contain
+                  either @work and/or @holiday in their text will be reported).
+                  (But see -count, which changes how the @<words> are used.)
   
   -count          for the @<words> specified, count how many events contain
                   them, and report that for each @<word>. This counts the
@@ -66,6 +67,11 @@ Usage
   -edit           Edit the events file, using the editor named in the
                   EDITOR environment variable, or 'vim' by default.
                   This can be useful if the file is somewhere unobvious.
+  
+  -nopage         Don't page the output of the list of events (only the "default"
+                  output of events is paged, and then only if necessary)
+  -nobold         Don't try to enbolden the current date. Useful if piping
+                  to a file.
   
   -atwords        report on which @<words> are used in the events file.
   -at_words       synonym for -atwords
@@ -139,10 +145,10 @@ matters. A <colon-date> may be any of:
 Also, it is possible to select a day before or after a particular event,
 using one of:
 
-    * :<day-specifier> before <year> <mon> <day> [<nam>]
-    * :<day-specifier> after <year> <mon> <day> [<nam>]
-    * :<day-specifier> on-or-before <year> <mon> <day> [<nam>]
-    * :<day-specifier> on-or-after <year> <mon> <day> [<nam>]
+    * :<day-specifier> before <date>
+    * :<day-specifier> after <date>
+    * :<day-specifier> on-or-before <date>
+    * :<day-specifier> on-or-after <date>
 
 where <day-specifier> is one of:
 
@@ -154,6 +160,9 @@ for instance::
 
     :Mon before 2013 dec 25
     :weekend after 2013 dec 25 wed
+    :Sat after :first Tue
+
+(although the utility of using <colon-dates> in this context may be debatable).
 
 Note that "nearest" doesn't include the day itself, so::
 
@@ -245,6 +254,18 @@ It would be nice if one could use ':easter' without a qualifying year, to
 mean a repeating Easter event - at the moment each individual Easter needs
 to be specified.
 
+I would like to be able to say ':Friday before Dec 23' to indicate that this
+occurs on the Friday before Dec 23 each year. This also be done by having a
+specific ':Friday before Dec 23 2013' and a condition that indicates that it
+repeats on that "calculated" date each year - ':yearly' would repeat on the
+same date. This is, to some extent, similar to the ':easter' problem.
+
+(':yearly', and thus also an asterisk after a <year>, means "yearly on the
+same date", so doesn't do what I want. However, for a *calculated* date,
+maybe its meaning should be changed to do this instead. That wouldn't solve
+the "Easter with no first year" problem, but it would be a work-around. And
+arguably the current behaviour of ':yearly' is misleading.)
+
 It might be nice to allow more than one condition on a continuation line,
 perhaps with some separating punctuation - although I'm not 100% sure of this
 one.
@@ -310,19 +331,19 @@ and assuming that today's date is 3rd October 2013,we see:
   Reading events from './what.txt'
    Wed  2 Oct 2013, Daniel visiting
    Sat  5 Oct 2013, @Alfred Full Backup
-                    ---------------------------------------------------------------
+                    -------------------------------------------------------------
    Mon  7 Oct 2013, @Birthday: @Charles is 12, born in 2001
    Wed  9 Oct 2013, @Birthday: @Alfred is 33, born in 1980
    Thu 10 Oct 2013, 17:00 @Charles Singing lesson
-                    ---------------------------------------------------------------
+                    -------------------------------------------------------------
    Tue 15 Oct 2013, @Bethany Ipswich
    Thu 17 Oct 2013, 17:00 @Charles Singing lesson
-                    ---------------------------------------------------------------
+                    -------------------------------------------------------------
    Thu 24 Oct 2013, 17:00 @Charles Singing lesson
    Fri 25 Oct 2013, 10:00..17:00, Newmarket (Christmas) Craft Fair
    Sat 26 Oct 2013, 10:00..17:00, Newmarket (Christmas) Craft Fair
    Sun 27 Oct 2013, 10:00..16:00, Newmarket (Christmas) Craft Fair
-                    ---------------------------------------------------------------
+                    -------------------------------------------------------------
    Thu 31 Oct 2013, 17:00 @Charles Singing lesson
   
   start 2013-10-02 .. yesterday 2013-10-02 .. today 2013-10-03 .. end 2013-10-31

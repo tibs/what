@@ -46,11 +46,12 @@ In each of the switches that take a <date>, it may be any of:
                 print a simple calendar for the given month
 -today          print out todays date
 
-@<word>, ...    only include events that include each given @<word> in
-                their text (so if a sequence of events are tagged with
-                @work, and another with @holiday, and the command line
-                include @work @holiday, then *only* those events will
-                be reported).
+@<word>         only include events that include this @<word> in their text.
+                Multiple @<words> may be specified. So if some events are
+                tagged with @work, and some with @holiday, and the command line
+                includes @work and @holiday, then only events that contain
+                either @work and/or @holiday in their text will be reported).
+                (But see -count, which changes how the @<words> are used.)
 
 -count          for the @<words> specified, count how many events contain
                 them, and report that for each @<word>. This counts the
@@ -71,6 +72,8 @@ In each of the switches that take a <date>, it may be any of:
                 EDITOR environment variable, or 'vim' by default.
                 This can be useful if the file is somewhere unobvious.
 
+-nopage         Don't page the output of the list of events (only the "default"
+                output of events is paged, and then only if necessary)
 -nobold         Don't try to enbolden the current date. Useful if piping
                 to a file.
 
@@ -95,6 +98,9 @@ Comments and empty lines
 Comments start with '#' and end at end-of-line.
 
 Empty lines (lines containing only whitespace and/or comments) are ignored.
+
+Events are specified by a date line, possibly followed by continuation lines
+which qualify how the events is repeated.
 
 Date lines
 ----------
@@ -138,18 +144,23 @@ matters. A <colon-date> may be any of:
 * :fifth <nam>
 * :last <nam> -- the last day of that name in a month
 * :lastbutone <nam> -- the penultimate day of that name in a month
-* :easter <nam> <year> -- where <nam> is 'Fri', 'Sat', 'Sun' or 'Mon'
+* :easter <nam> [<year>] -- where <nam> is 'Fri', 'Sat', 'Sun' or 'Mon'
   ('easter Fri' means the Friday of Easter in that current year), or
-* :easter <index> <year>, where <index> is relative to Easter Sunday, so
+* :easter <index> [<year>], where <index> is relative to Easter Sunday, so
   ':easter -1 2013' would mean the same as ':easter Sat 2013'.
+  case, if the <year> is omitted, then the "start" year is used, and the
+  event is set to repeat each Easter on that (relative) day. Note that
+  if a ':easter' event is followed by ':yearly', then that is the meaning
+  it has, a repetition on that day relative to Easter, not a repetition of
+  that *particular* date.
 
 Also, it is possible to select a day before or after a particular event,
 using one of:
 
-    * :<day-specifier> before <year> <mon> <day> [<nam>]
-    * :<day-specifier> after <year> <mon> <day> [<nam>]
-    * :<day-specifier> on-or-before <year> <mon> <day> [<nam>]
-    * :<day-specifier> on-or-after <year> <mon> <day> [<nam>]
+    * :<day-specifier> before <date>
+    * :<day-specifier> after <date>
+    * :<day-specifier> on-or-before <date>
+    * :<day-specifier> on-or-after <date>
 
 where <day-specifier> is one of:
 
@@ -161,6 +172,9 @@ for instance::
 
     :Mon before 2013 dec 25
     :weekend after 2013 dec 25 wed
+    :Sat after :first Tue
+
+(although the utility of using <colon-dates> in this context may be debatable).
 
 Note that "nearest" doesn't include the day itself, so::
 
@@ -183,8 +197,6 @@ means Saturday 28th September, but:
 
 means Sunday 29th
 
-The case of <word> is ignored.
-
 <text> is free text, and is left as-is, except that the <colon-words>:
 
     * :age
@@ -201,32 +213,36 @@ An example of both of these would be::
 
   1929* Sep 27, @Birthday: @Fred is :age, born in :year
 
+'#' characters in <text> do not start a comment.
+
 Continuation lines - qualifying the event
 -----------------------------------------
 Continuation lines follow date lines, and are indented. The amount of
 indentaton is not significant, and is not checked (although it looks nicer if
 it matches). A continuation line must start with a <colon-word>.The
-<colon-words> in continuation lines modify the preceding date line, and the
-available modifiers are:
+<colon-words> in continuation lines modify the preceding date line, as follows:
 
-* :except <year> <mon> <day> [<dat>][, <reason>] -- the preceding event
-  does not occur on this particular day. This is the only colon word to
-  take a ", <text>" after its date. At the moment, that text (<reason>) is
-  just discarded.
-* :until <year> <mon> <day> [<dat>] -- the preceding event continues until
-  this date. If this date does not exactly match the recurrence of the
-  preceding event, then the last occurrence is the one before this date.
-  Note that if you specify ':until' but don't specify an actual repeat
-  frequency, it will assume daily.
+* :except <date>, <reason>] -- the preceding event does not occur on this
+  particular day. This is the only colon word to take a ", <text>" after its
+  date. At the moment, that text (<reason>) is just discarded.
+* :from <date> -- the preceding event starts repetition on or after this date.
+  This is intended for use with dates such as ':every Tue' - it makes no sense
+  to use it with a <date> that already has an explicit day/month/year.
+  Specifying ':from' does not, of itself, imply any repetition.
+* :until <date> -- the preceding event continues until this date. If this date
+  does not exactly match the recurrence of the preceding event, then the last
+  occurrence is the one before this date. Note that if you specify ':until'
+  but don't specify an actual repeat frequency, it will assume daily.
 * :weekly -- the preceding event occurs weekly, i.e., every week on the
   same day.
 * :fortnightly -- the preceding event occurs fortnightly, i.e., every
   other week on the same day.
 * :monthly -- the preceding event occurs monthly, i.e., every month on the
   same date.
-* :yearly -- the preceding event occurs yearly, on the same date.
-  This is exactly equivalent to putting an asterisk after the <year> in
-  the date line.
+* :yearly -- the preceding event occurs yearly. This is exactly equivalent to
+  putting an asterisk after the <year> in the date line. Note that for
+  ':easter' dates, this means repeating on the same day relative to Easter,
+  not the same particular date.
 * :every <count> days -- the preceding event occurs every <count> days,
   starting on the original date. ':every 7 days' is thus the same as
   ':weekly'. I apologise in advance for ':every 1 days'.
@@ -248,21 +264,13 @@ It would be nice if ':except' and ':until' would also accept a date of the
 form <mon> <day>, and work out the year based upon the year of the date line
 that they are qualifying.
 
-It would be nice if one could use ':easter' without a qualifying year, to
-mean a repeating Easter event - at the moment each individual Easter needs
-to be specified.
+I would like to be able to say::
 
-I would like to be able to say ':Friday before Dec 23' to indicate that this
-occurs on the Friday before Dec 23 each year. This also be done by having a
-specific ':Friday before Dec 23 2013' and a condition that indicates that it
-repeats on that "calculated" date each year - ':yearly' would repeat on the
-same date. This is, to some extent, similar to the ':easter' problem.
+    :Friday before Dec 23 2013
+       :yearly
 
-(':yearly', and thus also an asterisk after a <year>, means "yearly on the
-same date", so doesn't do what I want. However, for a *calculated* date,
-maybe its meaning should be changed to do this instead. That wouldn't solve
-the "Easter with no first year" problem, but it would be a work-around. And
-arguably the current behaviour of ':yearly' is misleading.)
+to indicate that this occurs on the Friday before Dec 23 each year, much as is
+done for ':easter'.
 
 It might be nice to allow more than one condition on a continuation line,
 perhaps with some separating punctuation - although I'm not 100% sure of this
@@ -644,6 +652,16 @@ class Event(object):
         # Repeat on the Nth day of the month, for each N
         self.repeat_on_Nth_of_month = set()
 
+        # This date occurs on the Nth day of Easter
+        # This will either be None (it isn't) or an index relative to Easter
+        # Sunday. If we then have repeat_yearly set, we will also repeat on
+        # that Nth day of Easter each succeeding year.
+        self.on_Nth_day_of_easter = None
+
+        # Start repeating on or after the given date. Only makes sense if
+        # we were not really given an explicit date already.
+        self.repeat_from = None
+
         # Stop repeating on the given date. If that date is a day we would
         # repeat on, then keep it.
         self.repeat_until = None
@@ -731,6 +749,10 @@ class Event(object):
             for index, day_name in sorted(self.repeat_ordinal):
                 parts.append('  :{} {}'.format(ORDINAL[index], day_name))
 
+        if self.repeat_from:
+            parts.append('  :from {} {} {}'.format(self.repeat_from.year,
+                MONTH_NAME[self.repeat_from.month], self.repeat_from.day))
+
         if self.repeat_until:
             parts.append('  :until {} {} {}'.format(self.repeat_until.year,
                 MONTH_NAME[self.repeat_until.month], self.repeat_until.day))
@@ -776,6 +798,10 @@ class Event(object):
         if self.repeat_ordinal:
             for index, day_name in sorted(self.repeat_ordinal):
                 parts.append('  :{} {}'.format(ORDINAL[index], day_name))
+
+        if self.repeat_from:
+            parts.append('  :from {} {} {}'.format(self.repeat_from.year,
+                MONTH_NAME[self.repeat_from.month], self.repeat_from.day))
 
         if self.repeat_until:
             parts.append('  :until {} {} {}'.format(self.repeat_until.year,
@@ -842,6 +868,18 @@ class Event(object):
 
         dates = set()
 
+        if self.repeat_from:
+            if self.repeat_from > end:
+                #print(self)
+                #print('repeat from {} is after end {}'
+                #      ' - we can ignore it'.format(self.repeat_from, end))
+                return []
+            if self.repeat_from > start:
+                #print(self)
+                #print('repeat from {} is after start {}'
+                #      ' - adjusting range'.format(self.repeat_from, start))
+                start = self.repeat_from
+
         if self.repeat_until:
             if self.repeat_until < start:
                 #print(self)
@@ -864,10 +902,20 @@ class Event(object):
             dates.add(self.date)
 
         if self.repeat_yearly:
-            d = self.date.replace(year=start.year)
-            while start <= d <= end:
-                dates.add(d)
-                d = d.replace(year=d.year+1)
+            if self.on_Nth_day_of_easter:
+                # Remember, this date is already the Easter for start.year
+                for year in range(start.year+1, end.year+1):
+                    easter = calc_easter(year)
+                    d = easter + datetime.timedelta(days=self.on_Nth_day_of_easter)
+                    if start <= d <= end:
+                        dates.add(d)
+                    if d > end:
+                        break
+            else:
+                d = self.date.replace(year=start.year)
+                while start <= d <= end:
+                    dates.add(d)
+                    d = d.replace(year=d.year+1)
 
         if self.repeat_every_N_days:
             for n in sorted(self.repeat_every_N_days):
@@ -913,13 +961,13 @@ class Event(object):
         if ':year' in self.colon_words:
             text = text.replace(':year', str(self.date.year))
 
-        things = []
+        things = set()
         for date in dates:
             if ':age' in self.colon_words:
                 text = text.replace(':age', str(date.year - self.date.year))
-            things.append((date, text, self))
+            things.add((date, text, self))
 
-        return things
+        return sorted(things)
 
 def colon_what(colon_word, words):
     """A simple utility to re-join :<word> commands for error reporting.
@@ -1176,10 +1224,10 @@ def colon_event_easter(colon_word, words, start):
 
     For instance, ":easter Fri 2013" or ":easter -10 1990"
     """
-    if len(words) != 2:
+    if len(words) not in (1, 2):
         raise GiveUp('Expected one of:\n'
-                     '  :easter Fri|Sat|Sun|Mon <year>\n'
-                     '  :easter <offset> <year>\n'
+                     '  :easter Fri|Sat|Sun|Mon [<year>[\n'
+                     '  :easter <offset> [<year>[\n'
                      'not {!r}'.format(colon_what(colon_word, words)))
     when = words[0].capitalize()
     if when == 'Fri':
@@ -1200,29 +1248,38 @@ def colon_event_easter(colon_word, words, start):
                          'not {!r}\n'
                          'Error reading <offset>, {}'.format(colon_what(colon_word, words), e))
 
-    try:
-        year = int(words[1])
-    except ValueError as e:
-        raise GiveUp('Expected one of:\n'
-                     '  :easter Fri|Sat|Sun|Mon <year>\n'
-                     '  :easter <offset> <year>\n'
-                     'not {!r}\n'
-                     'Error reading <year>, {}'.format(colon_what(colon_word, words), e))
+    repeat = False
+    if len(words) == 2:
+        try:
+            year = int(words[1])
+        except ValueError as e:
+            raise GiveUp('Expected one of:\n'
+                         '  :easter Fri|Sat|Sun|Mon <year>\n'
+                         '  :easter <offset> <year>\n'
+                         'not {!r}\n'
+                         'Error reading <year>, {}'.format(colon_what(colon_word, words), e))
+    else:
+        # Start with an Easter in our 'start' year
+        year = start.year
+        repeat = True
 
     easter = calc_easter(year)
     date = easter + datetime.timedelta(days=offset)
 
     event = Event(date)
     event.colon_date = colon_what(colon_word, words)
+    event.on_Nth_day_of_easter = offset
+    if repeat:
+        event.repeat_yearly = True
     return event
 
 def colon_event_weekmagic(colon_word, words, start):
     """A day relative to a date
 
-    * <something> 'after' <year> <month-name> <day> [<day-name>]
-    * <something> 'before' <year> <month-name> <day> [<day-name>]
-    * <something> 'on-or-after' <year> <month-name> <day> [<day-name>]
-    * <something> 'on-or-before' <year> <month-name> <day> [<day-name>]
+    * <something> 'after' <date>
+    * <something> 'before' <date>
+    * <something> 'on-or-after' <date>
+    * <something> 'on-or-before' <date>
 
     where <something> is a day name, or 'weekday', or 'weekend'
     """
@@ -1360,11 +1417,37 @@ def colon_condition_until(colon_word, event, words, start):
     if date < event.date:
         raise GiveUp('Date in {!r} is before main date {} {} {}'.format(
             colon_what(colon_word, words), event.date.year,
-            MONTH_NUMBER[event.date.month], event.date.day))
+            MONTH_NAME[event.date.month], event.date.day))
+    if event.repeat_from and date < event.repeat_from:
+        raise GiveUp('Date in {!r} is before :from {} {} {}'.format(
+            colon_what(colon_word, words), event.repeat_from.year,
+            MONTH_NAME[event.repeat_from.month], event.repeat_from.day))
     if event.repeat_until is None:
         event.repeat_until = date
     elif event.repeat_until > date: # This new date is earlier, so use it
         event.repeat_until = date
+
+def colon_condition_from(colon_word, event, words, start):
+    """A specific starting condition.
+
+    Applies to the preceding date line
+    """
+    eventlet = parse_date(' '.join(words), start,
+                          'it does not make sense inside {}'.format(
+                           colon_what(colon_word, words)))
+    date = eventlet.date
+    # Note that this date may well be after our 'start' date, as we may
+    # have been asked to look at "historical" events. So we do not need
+    # to check for that. However, if we've already been given an 'until'
+    # date, we should check that.
+    if event.repeat_until and date > event.repeat_until:
+        raise GiveUp('Date in {!r} is after :until {} {} {}'.format(
+            colon_what(colon_word, words), event.repeat_until.year,
+            MONTH_NAME[event.repeat_until.month], event.repeat_until.day))
+    if event.repeat_from is None:
+        event.repeat_from = date
+    elif event.repeat_from < date: # This new date is earlier, so use it
+        event.repeat_from = date
 
 def colon_condition_weekly(colon_word, event, words, start):
     """Repeating weekly.
@@ -1487,6 +1570,7 @@ colon_event_methods = {':every': colon_event_every,
 
 colon_condition_methods = {':except': colon_condition_except,
                            ':until': colon_condition_until,
+                           ':from': colon_condition_from,
                            ':weekly': colon_condition_weekly,
                            ':fortnightly': colon_condition_fortnightly,
                            ':monthly': colon_condition_monthly,
@@ -1867,7 +1951,7 @@ def bold(text):
         # We're going to assume ANSI escape codes work...
         return '{}{}{}'.format(ANSI_BOLD, text, ANSI_NORMAL)
 
-def report_events(things, today, enbolden=True):
+def report_events(things, today, enbolden=True, paginate=True):
     """Report on the days given us.
     """
     prev = None
@@ -1887,7 +1971,11 @@ def report_events(things, today, enbolden=True):
         lines.append('{}{}, {}'.format('*' if date == today else ' ',
                                        date_str, text))
         prev = week_number
-    page('\n'.join(lines))
+    text = '\n'.join(lines)
+    if paginate:
+        page(text)
+    else:
+        print(text)
 
 # -----------------------------------------------------------------------------
 # Paging
@@ -2129,6 +2217,7 @@ def report(args):
     start = None
     end = None
     enbolden = True
+    paginate = True
     at_words = set()
 
     while args:
@@ -2163,6 +2252,8 @@ def report(args):
             today = get_cmdline_date(word, args)
         elif word == '-nobold':
             enbolden = False
+        elif word == '-nopage':
+            paginate = False
         elif word == '-edit':
             action = 'edit'
         elif word == '-count':
@@ -2242,7 +2333,7 @@ def report(args):
         report_atword_days(things, at_words, start, end)
 
     elif action == 'report':
-        report_events(things, today, enbolden)
+        report_events(things, today, enbolden, paginate)
 
     print('\nstart {} .. yesterday {} .. today {} .. end {}'.format(start,
         yesterday, today, end))
