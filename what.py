@@ -252,6 +252,18 @@ It would be nice if one could use ':easter' without a qualifying year, to
 mean a repeating Easter event - at the moment each individual Easter needs
 to be specified.
 
+I would like to be able to say ':Friday before Dec 23' to indicate that this
+occurs on the Friday before Dec 23 each year. This also be done by having a
+specific ':Friday before Dec 23 2013' and a condition that indicates that it
+repeats on that "calculated" date each year - ':yearly' would repeat on the
+same date. This is, to some extent, similar to the ':easter' problem.
+
+(':yearly', and thus also an asterisk after a <year>, means "yearly on the
+same date", so doesn't do what I want. However, for a *calculated* date,
+maybe its meaning should be changed to do this instead. That wouldn't solve
+the "Easter with no first year" problem, but it would be a work-around. And
+arguably the current behaviour of ':yearly' is misleading.)
+
 It might be nice to allow more than one condition on a continuation line,
 perhaps with some separating punctuation - although I'm not 100% sure of this
 one.
@@ -1864,7 +1876,7 @@ def report_events(things, today, enbolden=True):
     for date, text, event in sorted(things):
         iso_year, week_number, weekday = date.isocalendar()
         if prev and week_number > prev:
-            lines.append(' {}{}'.format(' '*spacer, '-'*(80-spacer)))
+            lines.append(' {}{}'.format(' '*spacer, '-'*(78-spacer)))
         # What order do I *actually* want the date written out in?
         # I think this is perhaps the most useful for looking at nearby
         # dates (when the day and date are most important)
@@ -2028,8 +2040,9 @@ def page(text):
     while True:
         sub = lines[start:start+display_lines]
         print('\n'.join(sub))
-        reply = prompt('Paging [<space> for next page, <return> for next line,'
-                       ' b for back, q for quit]')
+        percentage = int(100 * (start+len(sub)) / num_lines)
+        reply = prompt('Paging {}% [<space>=next page, <return>=next line,'
+                       ' b=back, q=quit]'.format(percentage))
         sys.stdout.write('\n')
         if reply == 'q':
             return
