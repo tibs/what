@@ -1939,18 +1939,6 @@ def report_atword_days(things, at_words, start, end):
         print(format.format(word, value, '' if value==1 else 's',
                             start, end))
 
-# The octal forms are more traditional - this is old VT100 stuff
-ANSI_BOLD='\033[1m'
-ANSI_NORMAL='\033[0m'
-
-def bold(text):
-    if sys.platform == 'win32':
-        # It's non-trivial, so we don't try
-        return text
-    else:
-        # We're going to assume ANSI escape codes work...
-        return '{}{}{}'.format(ANSI_BOLD, text, ANSI_NORMAL)
-
 def report_events(things, today, enbolden=True, paginate=True):
     """Report on the days given us.
     """
@@ -1976,6 +1964,109 @@ def report_events(things, today, enbolden=True, paginate=True):
         page(text)
     else:
         print(text)
+
+# -----------------------------------------------------------------------------
+# Bold text
+
+if sys.platform == 'win32':
+    # From http://www.burgaud.com/bring-colors-to-the-windows-console-with-python/
+    """
+    Colors text in console mode application (win32).
+    Uses ctypes and Win32 methods SetConsoleTextAttribute and
+    GetConsoleScreenBufferInfo.
+
+    $Id: color_console.py 534 2009-05-10 04:00:59Z andre $
+    """
+
+    from ctypes import windll, Structure, c_short, c_ushort, byref
+
+    SHORT = c_short
+    WORD = c_ushort
+
+    class COORD(Structure):
+      """struct in wincon.h."""
+      _fields_ = [
+        ("X", SHORT),
+        ("Y", SHORT)]
+
+    class SMALL_RECT(Structure):
+      """struct in wincon.h."""
+      _fields_ = [
+        ("Left", SHORT),
+        ("Top", SHORT),
+        ("Right", SHORT),
+        ("Bottom", SHORT)]
+
+    class CONSOLE_SCREEN_BUFFER_INFO(Structure):
+      """struct in wincon.h."""
+      _fields_ = [
+        ("dwSize", COORD),
+        ("dwCursorPosition", COORD),
+        ("wAttributes", WORD),
+        ("srWindow", SMALL_RECT),
+        ("dwMaximumWindowSize", COORD)]
+
+    # winbase.h
+    STD_INPUT_HANDLE = -10
+    STD_OUTPUT_HANDLE = -11
+    STD_ERROR_HANDLE = -12
+
+    # wincon.h
+    FOREGROUND_BLACK     = 0x0000
+    FOREGROUND_BLUE      = 0x0001
+    FOREGROUND_GREEN     = 0x0002
+    FOREGROUND_CYAN      = 0x0003
+    FOREGROUND_RED       = 0x0004
+    FOREGROUND_MAGENTA   = 0x0005
+    FOREGROUND_YELLOW    = 0x0006
+    FOREGROUND_GREY      = 0x0007
+    FOREGROUND_INTENSITY = 0x0008 # foreground color is intensified.
+
+    BACKGROUND_BLACK     = 0x0000
+    BACKGROUND_BLUE      = 0x0010
+    BACKGROUND_GREEN     = 0x0020
+    BACKGROUND_CYAN      = 0x0030
+    BACKGROUND_RED       = 0x0040
+    BACKGROUND_MAGENTA   = 0x0050
+    BACKGROUND_YELLOW    = 0x0060
+    BACKGROUND_GREY      = 0x0070
+    BACKGROUND_INTENSITY = 0x0080 # background color is intensified.
+
+    stdout_handle = windll.kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+    SetConsoleTextAttribute = windll.kernel32.SetConsoleTextAttribute
+    GetConsoleScreenBufferInfo = windll.kernel32.GetConsoleScreenBufferInfo
+
+    def get_text_attr():
+      """Returns the character attributes (colors) of the console screen
+      buffer."""
+      csbi = CONSOLE_SCREEN_BUFFER_INFO()
+      GetConsoleScreenBufferInfo(stdout_handle, byref(csbi))
+      return csbi.wAttributes
+
+    def set_text_attr(color):
+      """Sets the character attributes (colors) of the console screen
+      buffer. Color is a combination of foreground and background color,
+      foreground and background intensity."""
+      SetConsoleTextAttribute(stdout_handle, color)
+
+    def print_bold(text):
+          default_colors = get_text_attr()
+          set_text_attr(default_colors | FOREGROUND_INTENSITY)
+          sys.stdout.write(text)
+          set_text_attr(default_colors)
+
+
+# The octal forms are more traditional - this is old VT100 stuff
+ANSI_BOLD='\033[1m'
+ANSI_NORMAL='\033[0m'
+
+def bold(text):
+    if sys.platform == 'win32':
+        # Windows is more difficult - pass for now
+        return text
+    else:
+        # We're going to assume ANSI escape codes work...
+        return '{}{}{}'.format(ANSI_BOLD, text, ANSI_NORMAL)
 
 # -----------------------------------------------------------------------------
 # Paging
@@ -2066,6 +2157,7 @@ def get_terminal_size(use_default=False):
 # Thanks to
 # http://stackoverflow.com/questions/3523174/raw-input-in-python-without-pressing-enter
 # http://code.activestate.com/recipes/134892-getch-like-unbuffered-character-reading-from-stdin/ 
+import msvcrt
 def read_char_windows(echo=True):
     "Get a single character on Windows."
     while msvcrt.kbhit():
@@ -2277,11 +2369,11 @@ def report(args):
             end = today + datetime.timedelta(days=7)
         elif word == '-month':
             try:
-                end = today.replace(day=day, month=start.month+1)
+                end = today.replace(day=day, month=today.month+1)
             except ValueError:
-                end = today.replace(month=1, year=start.year+1)
+                end = today.replace(month=1, year=today.year+1)
         elif word == '-year':
-            end = today.replace(year=start.year+1)
+            end = today.replace(year=today.year+1)
         elif word[0] == '-' and not os.path.exists(word):
             raise GiveUp('Unexpected switch {!r}'.format(word))
         elif word[0] == '@':
@@ -2335,8 +2427,12 @@ def report(args):
     elif action == 'report':
         report_events(things, today, enbolden, paginate)
 
-    print('\nstart {} .. yesterday {} .. today {} .. end {}'.format(start,
-        yesterday, today, end))
+    if sys.platform == 'win32':
+        print_bold('\nstart {} .. yesterday {} .. today {} .. end {}'.format(start,
+            yesterday, today, end))
+    else:
+        print('\nstart {} .. yesterday {} .. today {} .. end {}'.format(start,
+            yesterday, today, end))
 
 if __name__ == '__main__':
     args = sys.argv[1:]

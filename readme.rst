@@ -95,6 +95,9 @@ Comments start with '#' and end at end-of-line.
 
 Empty lines (lines containing only whitespace and/or comments) are ignored.
 
+Events are specified by a date line, possibly followed by continuation lines
+which qualify how the events is repeated.
+
 Date lines
 ----------
 Date lines are formed as::
@@ -137,10 +140,15 @@ matters. A <colon-date> may be any of:
 * :fifth <nam>
 * :last <nam> -- the last day of that name in a month
 * :lastbutone <nam> -- the penultimate day of that name in a month
-* :easter <nam> <year> -- where <nam> is 'Fri', 'Sat', 'Sun' or 'Mon'
+* :easter <nam> [<year>] -- where <nam> is 'Fri', 'Sat', 'Sun' or 'Mon'
   ('easter Fri' means the Friday of Easter in that current year), or
-* :easter <index> <year>, where <index> is relative to Easter Sunday, so
+* :easter <index> [<year>], where <index> is relative to Easter Sunday, so
   ':easter -1 2013' would mean the same as ':easter Sat 2013'.
+  case, if the <year> is omitted, then the "start" year is used, and the
+  event is set to repeat each Easter on that (relative) day. Note that
+  if a ':easter' event is followed by ':yearly', then that is the meaning
+  it has, a repetition on that day relative to Easter, not a repetition of
+  that *particular* date.
 
 Also, it is possible to select a day before or after a particular event,
 using one of:
@@ -185,8 +193,6 @@ means Saturday 28th September, but:
 
 means Sunday 29th
 
-The case of <word> is ignored.
-
 <text> is free text, and is left as-is, except that the <colon-words>:
 
     * :age
@@ -203,32 +209,36 @@ An example of both of these would be::
 
   1929* Sep 27, @Birthday: @Fred is :age, born in :year
 
+'#' characters in <text> do not start a comment.
+
 Continuation lines - qualifying the event
 -----------------------------------------
 Continuation lines follow date lines, and are indented. The amount of
 indentaton is not significant, and is not checked (although it looks nicer if
 it matches). A continuation line must start with a <colon-word>.The
-<colon-words> in continuation lines modify the preceding date line, and the
-available modifiers are:
+<colon-words> in continuation lines modify the preceding date line, as follows:
 
-* :except <year> <mon> <day> [<dat>][, <reason>] -- the preceding event
-  does not occur on this particular day. This is the only colon word to
-  take a ", <text>" after its date. At the moment, that text (<reason>) is
-  just discarded.
-* :until <year> <mon> <day> [<dat>] -- the preceding event continues until
-  this date. If this date does not exactly match the recurrence of the
-  preceding event, then the last occurrence is the one before this date.
-  Note that if you specify ':until' but don't specify an actual repeat
-  frequency, it will assume daily.
+* :except <date>, <reason>] -- the preceding event does not occur on this
+  particular day. This is the only colon word to take a ", <text>" after its
+  date. At the moment, that text (<reason>) is just discarded.
+* :from <date> -- the preceding event starts repetition on or after this date.
+  This is intended for use with dates such as ':every Tue' - it makes no sense
+  to use it with a <date> that already has an explicit day/month/year.
+  Specifying ':from' does not, of itself, imply any repetition.
+* :until <date> -- the preceding event continues until this date. If this date
+  does not exactly match the recurrence of the preceding event, then the last
+  occurrence is the one before this date. Note that if you specify ':until'
+  but don't specify an actual repeat frequency, it will assume daily.
 * :weekly -- the preceding event occurs weekly, i.e., every week on the
   same day.
 * :fortnightly -- the preceding event occurs fortnightly, i.e., every
   other week on the same day.
 * :monthly -- the preceding event occurs monthly, i.e., every month on the
   same date.
-* :yearly -- the preceding event occurs yearly, on the same date.
-  This is exactly equivalent to putting an asterisk after the <year> in
-  the date line.
+* :yearly -- the preceding event occurs yearly. This is exactly equivalent to
+  putting an asterisk after the <year> in the date line. Note that for
+  ':easter' dates, this means repeating on the same day relative to Easter,
+  not the same particular date.
 * :every <count> days -- the preceding event occurs every <count> days,
   starting on the original date. ':every 7 days' is thus the same as
   ':weekly'. I apologise in advance for ':every 1 days'.
@@ -250,21 +260,13 @@ It would be nice if ':except' and ':until' would also accept a date of the
 form <mon> <day>, and work out the year based upon the year of the date line
 that they are qualifying.
 
-It would be nice if one could use ':easter' without a qualifying year, to
-mean a repeating Easter event - at the moment each individual Easter needs
-to be specified.
+I would like to be able to say::
 
-I would like to be able to say ':Friday before Dec 23' to indicate that this
-occurs on the Friday before Dec 23 each year. This also be done by having a
-specific ':Friday before Dec 23 2013' and a condition that indicates that it
-repeats on that "calculated" date each year - ':yearly' would repeat on the
-same date. This is, to some extent, similar to the ':easter' problem.
+    :Friday before Dec 23 2013
+       :yearly
 
-(':yearly', and thus also an asterisk after a <year>, means "yearly on the
-same date", so doesn't do what I want. However, for a *calculated* date,
-maybe its meaning should be changed to do this instead. That wouldn't solve
-the "Easter with no first year" problem, but it would be a work-around. And
-arguably the current behaviour of ':yearly' is misleading.)
+to indicate that this occurs on the Friday before Dec 23 each year, much as is
+done for ':easter'.
 
 It might be nice to allow more than one condition on a continuation line,
 perhaps with some separating punctuation - although I'm not 100% sure of this
