@@ -235,6 +235,8 @@ it matches). A continuation line must start with a <colon-word>.The
   does not exactly match the recurrence of the preceding event, then the last
   occurrence is the one before this date. Note that if you specify ':until'
   but don't specify an actual repeat frequency, it will assume daily.
+  If you specify multiple ':until' conditions, the earliest will end up being
+  used.
 * :weekly -- the preceding event occurs weekly, i.e., every week on the
   same day.
 * :fortnightly -- the preceding event occurs fortnightly, i.e., every
@@ -248,11 +250,17 @@ it matches). A continuation line must start with a <colon-word>.The
 * :every <count> days -- the preceding event occurs every <count> days,
   starting on the original date. ':every 7 days' is thus the same as
   ':weekly'. I apologise in advance for ':every 1 days'.
-* :for <count> days -- for that many days, including the original date
+* :for <count> days -- for that many days, including the original date. This
+  actually gets turned into an appropriate ':until <date>'.
 * :for <count> weekdays -- for that many Mon..Fri days. Note that if the
-  original date is a Sat or Sun, it/they won't count to the total. Works
-  exactly as if it were a combination of ':for <n> days' with the internal
-  weekend days excluded using ':except <weekend-day>'.
+  original date is a Sat or Sun, it will have already been added as an event
+  - this only affects dates *after* that. It works exactly as if it were a
+    combination of an appropriate ':until <date>' with the internal weekend
+    days excluded using ':except <weekend-day>'.
+
+Note that it is not defined what happens if you specify contradictory or
+clashing conditions - for instance saying ':until <some-date>' and then
+also saying ':for 5 weekdays', when those two do not have an identical effect.
 
 Possible future developments
 ----------------------------
@@ -1535,16 +1543,17 @@ def colon_condition_for(colon_word, event, words, start):
         until = event.date + datetime.timedelta(days=count-1) # including THIS day
     else:
         # Hah - weekdays only
-        if 0 <= start.weekday() <= 5:       # we're a weekday
+        if 0 <= start.weekday() <= 4:       # we're a weekday
             count -= 1                      # so we also count
         one_day = datetime.timedelta(days=1)
         until = event.date
         while count > 0:
             until = until + one_day
-            while until.weekday in (5, 6):
-                event.not_on.add(until)
-                until = until + one_day
-            count -= 1
+            if until.weekday() in (5, 6):
+                event.not_on.add((until, 'excluding weekends in {!r}'.format(
+                    colon_what(colon_word, words))))
+            else:
+                count -= 1
     if event.repeat_until is None:
         event.repeat_until = until
     elif event.repeat_until > until: # This new date is earlier, so use it
@@ -2074,7 +2083,6 @@ def get_terminal_size(use_default=False):
 # http://code.activestate.com/recipes/134892-getch-like-unbuffered-character-reading-from-stdin/ 
 if sys.platform == 'win32':
     import msvcrt
-
     def read_char_windows(echo=True):
         "Get a single character on Windows."
         while msvcrt.kbhit():
