@@ -68,8 +68,10 @@ In each of the switches that take a <date>, it may be any of:
 <filename>      the name of the file to read events from. The default
                 is "what.txt" in the same directory as this script.
 
--edit           Edit the events file, using the editor named in the
-                EDITOR environment variable, or 'vim' by default.
+-edit [<prog>]  Edit the events file. If <prog> is given, then it should be the
+                editor to use (e.g., gvim or /usr/bin/sed). Otherwise the
+                editor named in the EDITOR environment variable will be used,
+                and if that is not set or cannot be found, 'vim' will be tried.
                 This can be useful if the file is somewhere unobvious.
 
 -nopage         Don't page the output of the list of events (only the "default"
@@ -1889,8 +1891,9 @@ def determine_dates(start=None, today=None, end=None):
 
     return start, yesterday, today, end
 
-def edit_file(filename):
-    editor = os.environ.get('EDITOR', 'vim')
+def edit_file(filename, editor):
+    if editor is None:
+        editor = os.environ.get('EDITOR', 'vim')
     print('Editing file {!r} with {}'.format(filename, editor))
     subprocess.call((editor, filename), close_fds=True)
 
@@ -2225,6 +2228,7 @@ def report(args):
     enbolden = True
     paginate = True
     at_words = set()
+    editor = None
 
     while args:
         word = args.pop(0)
@@ -2262,6 +2266,13 @@ def report(args):
             paginate = False
         elif word == '-edit':
             action = 'edit'
+            next_word = args[0]
+            if next_word.startswith('-'):
+                pass
+            elif os.path.exists(next_word):
+                pass
+            else:
+                editor = args.pop(0)
         elif word == '-count':
             action = 'count'
         elif word in ('-atwords', '-at-words', '-at_words'):
@@ -2306,7 +2317,7 @@ def report(args):
         filename = os.path.join(this_dir, 'what.txt')
 
     if action == 'edit':
-        edit_file(filename)
+        edit_file(filename, editor)
         return
 
     print('Reading events from {!r}'.format(filename))
