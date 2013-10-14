@@ -255,8 +255,8 @@ it matches). A continuation line must start with a <colon-word>.The
 * :for <count> weekdays -- for that many Mon..Fri days. Note that if the
   original date is a Sat or Sun, it will have already been added as an event
   - this only affects dates *after* that. It works exactly as if it were a
-    combination of an appropriate ':until <date>' with the internal weekend
-    days excluded using ':except <weekend-day>'.
+  combination of an appropriate ':until <date>' with the internal weekend
+  days excluded using ':except <weekend-day>'.
 
 Note that it is not defined what happens if you specify contradictory or
 clashing conditions - for instance saying ':until <some-date>' and then
