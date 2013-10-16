@@ -2274,13 +2274,14 @@ def report(args):
             paginate = False
         elif word == '-edit':
             action = 'edit'
-            next_word = args[0]
-            if next_word.startswith('-'):
-                pass
-            elif os.path.exists(next_word):
-                pass
-            else:
-                editor = args.pop(0)
+            if args:
+                next_word = args[0]
+                if next_word.startswith('-'):
+                    pass
+                elif os.path.exists(next_word):
+                    pass
+                else:
+                    editor = args.pop(0)
         elif word == '-count':
             action = 'count'
         elif word in ('-atwords', '-at-words', '-at_words'):
