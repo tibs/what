@@ -1419,15 +1419,35 @@ def colon_condition_until(colon_word, event, words, start):
     date.
 
     Applies to the preceding date line
+
+    The following is a bug - we have a ':until' that ends an event before
+    today's date:
+
+        >>> start=datetime.date(2013, 10, 24)
+        >>> events = parse_lines(
+        ...     [r':every Mon, 17:00..20:00 Some event',
+        ...      r'  :from  2013 Sep 9',
+        ...      r'  :until 2013 Oct 21'], start)
+
+
     """
     eventlet = parse_date(' '.join(words), start,
                           'it does not make sense inside {}'.format(
                            colon_what(colon_word, words)))
     date = eventlet.date
     if date < event.date:
-        raise GiveUp('Date in {!r} is before main date {} {} {}'.format(
-            colon_what(colon_word, words), event.date.year,
-            MONTH_NAME[event.date.month], event.date.day))
+        # This is an error if the event had an explicit date, but is not
+        # if the event was a recurring event that started before our
+        # date range of interest, and was meant to stop before then as well.
+        # As a crude check, the Event had an explicit date if it was not a
+        # colon_date:
+        if not event.colon_date:
+            raise GiveUp('Date in {!r} is before main date {} {} {}'.format(
+                colon_what(colon_word, words), event.date.year,
+                MONTH_NAME[event.date.month], event.date.day))
+        # That's probably good enough, at least for now - if we do make an
+        # event that has a repeat_until that stops it before it starts, that
+        # may just work...
     if event.repeat_from and date < event.repeat_from:
         raise GiveUp('Date in {!r} is before :from {} {} {}'.format(
             colon_what(colon_word, words), event.repeat_from.year,
