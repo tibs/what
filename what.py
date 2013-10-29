@@ -38,12 +38,21 @@ In each of the switches that take a <date>, it may be any of:
    * <day>-<month>-<year>
    * <day>-<month-name>-<year>
 
--week           set the end date to a week after "today"
--month          set the end date to a month after "today"
--year           set the end date to a year after "today"
+-w, -week       set the end date to a week after "today"
+-m, -month      set the end date to a month after "today"
+-2m, -2months   set the end date to two months after "today"
+-3m, -3months   set the end date to two months after "today"
+-y, -year       set the end date to a year after "today"
 
--cal <year> <month>
-                print a simple calendar for the given month
+-christmas      report on the month around Christmas (of this year)
+-xmas           the same
+-easter         report on the month around Easter, of this year or of next
+                year, depending on whether we're more than a fortnight after
+                this Easter
+
+-cal            print a simple calendar for this month
+-cal <mon>      print a simple calendar for month <mon> of this year
+-cal <mon> <y>  print a simple calendar for month <mon> of year <y>
 -today          print out todays date
 
 @<word>         only include events that include this @<word> in their text.
@@ -139,20 +148,20 @@ matters. A <colon-date> may be any of:
 * :every day <day> -- every month on that date, ':every day 8'.
   Note that this will not set an event in months which do not have that
   date.
-* :first <nam> -- the first day of that name in a month, ':first Mon'
-* :second <nam> -- the second day of that name in a month
+* :first <nam> -- the first day of that name in each month, ':first Mon'
+* :second <nam> -- the second day of that name in each month
 * :third <nam>
 * :fourth <nam>
 * :fifth <nam>
-* :last <nam> -- the last day of that name in a month
-* :lastbutone <nam> -- the penultimate day of that name in a month
+* :last <nam> -- the last day of that name in each month
+* :lastbutone <nam> -- the penultimate day of that name in each month
 * :easter <nam> [<year>] -- where <nam> is 'Fri', 'Sat', 'Sun' or 'Mon'
   ('easter Fri' means the Friday of Easter in that current year), or
 * :easter <index> [<year>], where <index> is relative to Easter Sunday, so
   ':easter -1 2013' would mean the same as ':easter Sat 2013'.
   case, if the <year> is omitted, then the "start" year is used, and the
   event is set to repeat each Easter on that (relative) day. Note that
-  if a ':easter' event is followed by ':yearly', then that is the meaning
+  if a ':easter' event is followed by ':yearly', then that iseachthe meaning
   it has, a repetition on that day relative to Easter, not a repetition of
   that *particular* date.
 
@@ -383,6 +392,9 @@ ORDINAL = {1: 'first', 2:'second', 3:'third', 4:'fourth', 5:'fifth',
            -1:'last', -2:'lastbutone'}
 
 timespan_re = re.compile(r'(\d|\d\d):(\d\d)\.\.(\d|\d\d):(\d\d)')
+
+ONE_DAY = datetime.timedelta(days=1)
+ONE_FORTNIGHT = datetime.timedelta(days=14)
 
 # Carefully match at either the start of the line/string or after a non-word,
 # and then accept the @ or : character followed by alphanumerics of either case
@@ -951,11 +963,19 @@ class Event(object):
 
         if self.repeat_ordinal:
             for index, day_name in sorted(self.repeat_ordinal):
-                d = calc_ordinal_day(self.date, index, day_name)
-                # We know that if they asked for the fifth day of a given
-                # name, it may or may not occur in this month
-                if start <= d <= end:
-                    dates.add(d)
+                this = self.date
+                while True:
+                    d = calc_ordinal_day(this, index, day_name)
+                    if d > end:
+                        break
+                    if d >= start:
+                        dates.add(d)
+                    # And look to the next month
+                    if this.month < 12:
+                        this = this.replace(month=this.month+1)
+                    else:
+                        this = this.replace(month=1, year=this.year+1)
+
 
         if self.not_on:
             for date, reason in sorted(self.not_on):
@@ -1075,6 +1095,17 @@ def colon_event_first(colon_word, words, start):
     <something> can be:
 
         * <day-name> -- the first day of that name in a month, ":first Mon"
+
+    For instance:
+
+        >>> start=datetime.date(2013, 10, 28)
+        >>> end  =datetime.date(2013, 11, 15)
+        >>> events = parse_lines(
+        ...     [r':first Sat, Full Backup'], start)
+        >>> # And that should not be empty
+        >>> find_events(events, start, end)
+        set([(datetime.date(2013, 11, 2), 'Full Backup', 2013 Oct  5 Sat, Full Backup
+          :first Sat)])
     """
     if len(words) != 1:
         raise GiveUp('Expected a day name, in {}'.format(
@@ -1420,8 +1451,8 @@ def colon_condition_until(colon_word, event, words, start):
 
     Applies to the preceding date line
 
-    The following is a bug - we have a ':until' that ends an event before
-    today's date:
+    The following was a bug - we have a ':until' that ends an event before
+    today's date, and it used to cause an exception:
 
         >>> start=datetime.date(2013, 10, 24)
         >>> events = parse_lines(
@@ -1545,6 +1576,51 @@ def colon_condition_for(colon_word, event, words, start):
     """Repeat for <count> days or weekdays
 
     As in ":for 5 days" or ":for 10 weekdays"
+
+    For instance:
+
+        >>> start=datetime.date(2013, 10, 27)
+        >>> end  =datetime.date(2013, 12, 25)
+        >>> events = parse_lines(
+        ...     [r'2013 Nov 25 Mon, @work Again, again',
+        ...      r'  :for 10 weekdays'], start)
+        >>> things = find_events(events, start, end)
+        >>> today=datetime.date(2013, 10, 28)
+        >>> report_events(things, today, False, False)
+         Mon 25 Nov 2013, @work Again, again
+         Tue 26 Nov 2013, @work Again, again
+         Wed 27 Nov 2013, @work Again, again
+         Thu 28 Nov 2013, @work Again, again
+         Fri 29 Nov 2013, @work Again, again
+                          -------------------------------------------------------------
+         Mon  2 Dec 2013, @work Again, again
+         Tue  3 Dec 2013, @work Again, again
+         Wed  4 Dec 2013, @work Again, again
+         Thu  5 Dec 2013, @work Again, again
+         Fri  6 Dec 2013, @work Again, again
+
+    and:
+
+        >>> start=datetime.date(2013, 10, 27)
+        >>> end  =datetime.date(2013, 12, 25)
+        >>> events = parse_lines(
+        ...     [r'2013 Nov 25 Mon, @work Again, again',
+        ...      r'  :for 10 days'], start)
+        >>> things = find_events(events, start, end)
+        >>> today=datetime.date(2013, 10, 28)
+        >>> report_events(things, today, False, False)
+         Mon 25 Nov 2013, @work Again, again
+         Tue 26 Nov 2013, @work Again, again
+         Wed 27 Nov 2013, @work Again, again
+         Thu 28 Nov 2013, @work Again, again
+         Fri 29 Nov 2013, @work Again, again
+         Sat 30 Nov 2013, @work Again, again
+         Sun  1 Dec 2013, @work Again, again
+                          -------------------------------------------------------------
+         Mon  2 Dec 2013, @work Again, again
+         Tue  3 Dec 2013, @work Again, again
+         Wed  4 Dec 2013, @work Again, again
+
     """
     if len(words) != 2 or words[1].lower() not in ('days', 'weekdays'):
         raise GiveUp("Expected ':repeat <num> days'\n"
@@ -1563,17 +1639,21 @@ def colon_condition_for(colon_word, event, words, start):
         until = event.date + datetime.timedelta(days=count-1) # including THIS day
     else:
         # Hah - weekdays only
+        #print('xxx count = {}'.format(count))
         if 0 <= start.weekday() <= 4:       # we're a weekday
             count -= 1                      # so we also count
-        one_day = datetime.timedelta(days=1)
+            #print('xxx this is a weekday -> count = {}'.format(count))
         until = event.date
-        while count > 0:
-            until = until + one_day
+        while count > 1:
+            until = until + ONE_DAY
+            #print('xxx {}'.format(until))
             if until.weekday() in (5, 6):
                 event.not_on.add((until, 'excluding weekends in {!r}'.format(
                     colon_what(colon_word, words))))
+                #print('xxx this is a weekend -> exclude')
             else:
                 count -= 1
+                #print('xxx this is a weekday -> count = {}'.format(count))
     if event.repeat_until is None:
         event.repeat_until = until
     elif event.repeat_until > until: # This new date is earlier, so use it
@@ -1979,7 +2059,7 @@ def report_events(things, today, enbolden=True, paginate=True):
     lines = []
     for date, text, event in sorted(things):
         iso_year, week_number, weekday = date.isocalendar()
-        if prev and week_number > prev:
+        if prev and week_number != prev:
             lines.append(' {}{}'.format(' '*spacer, '-'*(78-spacer)))
         # What order do I *actually* want the date written out in?
         # I think this is perhaps the most useful for looking at nearby
@@ -1988,8 +2068,9 @@ def report_events(things, today, enbolden=True, paginate=True):
                 MONTH_NAME[date.month], date.year)
         if date == today and enbolden:
             date_str = bold(date_str)
-        lines.append('{}{}, {}'.format('*' if date == today else ' ',
-                                       date_str, text))
+        lines.append('{:2} {}{}, {}'.format(week_number,
+                                            '*' if date == today else ' ',
+                                            date_str, text))
         prev = week_number
     text = '\n'.join(lines)
     if paginate:
@@ -2188,15 +2269,34 @@ def page(text):
 # Command line
 def print_calendar_month(switch, args):
     try:
-        year = args.pop(0)
+        word1 = args.pop(0)
     except IndexError as e:
-        raise GiveUp('Expected -cal <year> <month> - missing <year>')
+        # Assume they meant this month...
+        today = datetime.date.today()
+        calendar.prmonth(today.year, today.month)
+        return
+
     try:
-        month = args.pop(0)
+        word2 = args.pop(0)
     except IndexError as e:
-        raise GiveUp('Expected -cal <year> <month> - missing <month>')
-    month = _parse_month(word, month)
-    year = _parse_int_year(word, year)
+        # Assume they mean a month of this year
+        try:
+            month = _parse_month(switch, word1)
+        except Exception:
+            raise GiveUp('Expected "{}" or "{} <mon>" or "{} <mon> <year>",'
+                         ' not "{} {}"'.format(switch, switch, switch, switch,
+                             word1))
+        today = datetime.date.today()
+        calendar.prmonth(today.year, month)
+        return
+
+    try:
+        month = _parse_month(switch, word1)
+        year = _parse_int_year(switch, word2)
+    except ValueError:
+        raise GiveUp('Expected "{}" or "{} <mon>" or "{} <mon> <year>",'
+                     ' not "{} {} {}"'.format(switch, switch, switch, switch,
+                         word1, word2))
     calendar.prmonth(year, month)
 
 def _parse_int_day(switch, day):
@@ -2211,10 +2311,12 @@ def _parse_month(switch, mon):
     if mon_name in MONTH_NUMBER:
         return MONTH_NUMBER[mon_name]
     try:
-        return int(mon)
+        value = int(mon)
+        if not 1 <= value <= 12:
+            raise ValueError
     except ValueError:
-        raise GiveUp('Expected a date after {!r}, but month {!r} is not'
-                     ' a 3-letter month name or an integer'.format(switch, mon))
+        raise GiveUp('Expected a month after {!r}, but {!r} is not'
+                     ' a 3-letter month name or an integer 1..12'.format(switch, mon))
 
 def _parse_int_year(switch, year):
     try:
@@ -2319,15 +2421,44 @@ def report(args):
             print('Today is {} {} {} {}, {}'.format(DAYS[today.weekday()],
                 today.day, MONTH_NAME[today.month], today.year, today))
             return
-        elif word == '-week':
+        elif word in ('-w', '-week'):
             end = today + datetime.timedelta(days=7)
-        elif word == '-month':
-            try:
-                end = today.replace(day=day, month=today.month+1)
-            except ValueError:
+        elif word in ('-m', '-month'):
+            if today.month == 12:
                 end = today.replace(month=1, year=today.year+1)
-        elif word == '-year':
+            else:
+                end = today.replace(month=today.month+1)
+        elif word in ('-2m', '-2months'):
+            if today.month == 11:
+                end = today.replace(month=1, year=today.year+1)
+            elif today.month == 12:
+                end = today.replace(month=2, year=today.year+1)
+            else:
+                end = today.replace(month=today.month+2)
+        elif word in ('-3m', '-3months'):
+            if today.month == 10:
+                end = today.replace(month=1, year=today.year+1)
+            elif today.month == 11:
+                end = today.replace(month=2, year=today.year+1)
+            elif today.month == 12:
+                end = today.replace(month=3, year=today.year+1)
+            else:
+                end = today.replace(month=today.month+3)
+        elif word in ('-y','-year'):
             end = today.replace(year=today.year+1)
+        elif word == '-2y':     # XXX undocumented
+            end = today.replace(year=today.year+2)
+        elif word in ('-easter'):   # XXX undocumented
+            easter = calc_easter(today.year)
+            if easter < (today - ONE_FORTNIGHT):
+                easter = calc_easter(today.year+1)
+            today = easter
+            start = today - ONE_FORTNIGHT
+            end = today + ONE_FORTNIGHT
+        elif word in ('-christmas', '-xmas'):   # XXX undocumented
+            today = datetime.date(month=12, day=25, year=today.year)
+            start = today - ONE_FORTNIGHT
+            end = today + ONE_FORTNIGHT
         elif word[0] == '-' and not os.path.exists(word):
             raise GiveUp('Unexpected switch {!r}'.format(word))
         elif word[0] == '@':
