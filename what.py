@@ -2107,7 +2107,7 @@ def report_events(things, today, enbolden=True, paginate=True, with_week_number=
         # dates (when the day and date are most important)
         if date == prev_date:
             #text = '                  {}'.format(text)
-            text = ' ...............  {}'.format(text)
+            text = ' . . . . . . . .  {}'.format(text)
         else:
             date_str = '{:3} {:2} {:3} {:4}'.format(DAYS[date.weekday()], date.day,
                     MONTH_NAME[date.month], date.year)
