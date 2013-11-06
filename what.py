@@ -87,6 +87,7 @@ In each of the switches that take a <date>, it may be any of:
                 output of events is paged, and then only if necessary)
 -nobold         Don't try to enbolden the current date. Useful if piping
                 to a file.
+-noweek         Don't put the week number at the start of each event line.
 
 -atwords        report on which @<words> are used in the events file.
 -at_words       synonym for -atwords
@@ -997,7 +998,8 @@ class Event(object):
                 text = text.replace(':age', str(date.year - self.date.year))
             things.add((date, text, self))
 
-        return sorted(things)
+        #return sorted(things)
+        return sorted(things, key=(lambda x: str(x).lower()))
 
 def colon_what(colon_word, words):
     """A simple utility to re-join :<word> commands for error reporting.
@@ -1621,6 +1623,40 @@ def colon_condition_for(colon_word, event, words, start):
          Tue  3 Dec 2013, @work Again, again
          Wed  4 Dec 2013, @work Again, again
 
+    and:
+
+        >>> start=datetime.date(2013, 11, 6)
+        >>> end  =datetime.date(2013, 12, 10)
+        >>> events = parse_lines(
+        ...     [r'2013 Nov 17 Sun, @work Something',
+        ...      r'  :for 5 weekdays'], start)
+        >>> things = find_events(events, start, end)
+        >>> today=datetime.date(2013, 10, 28)
+        >>> report_events(things, today, False, False)
+         Sun 17 Nov 2013, @work Something
+                          -------------------------------------------------------------
+         Mon 18 Nov 2013, @work Something
+         Tue 19 Nov 2013, @work Something
+         Wed 20 Nov 2013, @work Something
+         Thu 21 Nov 2013, @work Something
+         Fri 22 Nov 2013, @work Something
+
+    and:
+
+        >>> start=datetime.date(2013, 11, 6)
+        >>> end  =datetime.date(2013, 12, 10)
+        >>> events = parse_lines(
+        ...     [r'2013 Nov 18 Mon, @work Something',
+        ...      r'  :for 5 weekdays'], start)
+        >>> things = find_events(events, start, end)
+        >>> today=datetime.date(2013, 10, 28)
+        >>> report_events(things, today, False, False)
+         Mon 18 Nov 2013, @work Something
+         Tue 19 Nov 2013, @work Something
+         Wed 20 Nov 2013, @work Something
+         Thu 21 Nov 2013, @work Something
+         Fri 22 Nov 2013, @work Something
+
     """
     if len(words) != 2 or words[1].lower() not in ('days', 'weekdays'):
         raise GiveUp("Expected ':repeat <num> days'\n"
@@ -1638,25 +1674,26 @@ def colon_condition_for(colon_word, event, words, start):
     if what == 'days':
         until = event.date + datetime.timedelta(days=count-1) # including THIS day
     else:
-        # Hah - weekdays only
-        #print('xxx count = {}'.format(count))
-        if 0 <= start.weekday() <= 4:       # we're a weekday
+        # Hah - weekdays only, except that the event date itself is always
+        # included, whether it is a weekday or not
+        ##print('xxx count = {}'.format(count))
+        if 0 <= event.date.weekday() <= 4:       # we're a weekday
             count -= 1                      # so we also count
-            #print('xxx this is a weekday -> count = {}'.format(count))
+            ##print('xxx this is a weekday -> count = {}'.format(count))
         until = event.date
-        while count > 1:
-            until = until + ONE_DAY
-            #print('xxx {}'.format(until))
-            if until.weekday() in (5, 6):
-                event.not_on.add((until, 'excluding weekends in {!r}'.format(
+        while count > 0:
+            next = until + ONE_DAY
+            while next.weekday() in (5,6):
+                event.not_on.add((next, 'excluding weekends in {!r}'.format(
                     colon_what(colon_word, words))))
-                #print('xxx this is a weekend -> exclude')
-            else:
-                count -= 1
-                #print('xxx this is a weekday -> count = {}'.format(count))
+                next = next + ONE_DAY
+            until = next
+            count -= 1
     if event.repeat_until is None:
+        ##print('xxx Using this <until>')
         event.repeat_until = until
     elif event.repeat_until > until: # This new date is earlier, so use it
+        ##print('xxx Using this <until> as it is earlier')
         event.repeat_until = until
 
 colon_event_methods = {':every': colon_event_every,
@@ -2051,27 +2088,41 @@ def report_atword_days(things, at_words, start, end):
         print(format.format(word, value, '' if value==1 else 's',
                             start, end))
 
-def report_events(things, today, enbolden=True, paginate=True):
+def report_events(things, today, enbolden=True, paginate=True, with_week_number=False):
     """Report on the days given us.
     """
     prev = None
+    prev_date = None
     spacer = 4+1+3+1+2+1+3+1+1
+    spacer_line = ' {}{}'.format(' '*spacer, '-'*(78-spacer))
+    if with_week_number:
+        spacer_line = '   {}'.format(spacer_line)
     lines = []
     for date, text, event in sorted(things):
         iso_year, week_number, weekday = date.isocalendar()
         if prev and week_number != prev:
-            lines.append(' {}{}'.format(' '*spacer, '-'*(78-spacer)))
+            lines.append(spacer_line)
         # What order do I *actually* want the date written out in?
         # I think this is perhaps the most useful for looking at nearby
         # dates (when the day and date are most important)
-        date_str = '{} {:2} {} {}'.format(DAYS[date.weekday()], date.day,
-                MONTH_NAME[date.month], date.year)
-        if date == today and enbolden:
-            date_str = bold(date_str)
-        lines.append('{:2} {}{}, {}'.format(week_number,
-                                            '*' if date == today else ' ',
-                                            date_str, text))
+        if date == prev_date:
+            #text = '                  {}'.format(text)
+            text = ' ...............  {}'.format(text)
+        else:
+            date_str = '{:3} {:2} {:3} {:4}'.format(DAYS[date.weekday()], date.day,
+                    MONTH_NAME[date.month], date.year)
+            if date == today and enbolden:
+                date_str = bold(date_str)
+            text = '{}{}, {}'.format('*' if date == today else ' ',
+                                          date_str, text)
+        if with_week_number:
+            if date == prev_date:
+                text = '   {}'.format(text)
+            else:
+                text = '{:2} {}'.format(week_number, text)
+        lines.append(text)
         prev = week_number
+        prev_date = date
     text = '\n'.join(lines)
     if paginate:
         page(text)
@@ -2359,6 +2410,7 @@ def report(args):
     paginate = True
     at_words = set()
     editor = None
+    with_week_number = True
 
     while args:
         word = args.pop(0)
@@ -2390,6 +2442,8 @@ def report(args):
             start = datetime.date(1900, 1, 1)
         elif word == '-for':
             today = get_cmdline_date(word, args)
+        elif word == '-noweek':
+            with_week_number = False
         elif word == '-nobold':
             enbolden = False
         elif word == '-nopage':
@@ -2510,7 +2564,8 @@ def report(args):
         report_atword_days(things, at_words, start, end)
 
     elif action == 'report':
-        report_events(things, today, enbolden, paginate)
+        report_events(things, today, enbolden, paginate,
+                      with_week_number=with_week_number)
 
     print('\nstart {} .. yesterday {} .. today {} .. end {}'.format(start,
         yesterday, today, end))
