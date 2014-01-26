@@ -27,6 +27,9 @@ usage_text = """\
 -end <date>     set the date to be used as the end of the range to be
                 reported. Otherwise, four weeks after "today" is used.
 
+-around <date>  set <start> a fortnight before <date>, <end> a fortnight
+                after, and <today> to <date>.
+
 -from <date>    synonym for -start <date>
 -to <date>      synonum for -end <date>
 
@@ -936,16 +939,18 @@ class Event(object):
                         break
             else:
                 d = self.date.replace(year=start.year)
-                while start <= d <= end:
-                    dates.add(d)
+                while d <= end:
+                    if d >= start:
+                        dates.add(d)
                     d = d.replace(year=d.year+1)
 
         if self.repeat_every_N_days:
             for n in sorted(self.repeat_every_N_days):
                 dt = datetime.timedelta(days=n)
                 d = self.date + dt
-                while start <= d <= end:
-                    dates.add(d)
+                while d <= end:
+                    if d >= start:
+                        dates.add(d)
                     d = d + dt
 
         # XXX This needs testing
@@ -2039,7 +2044,10 @@ def determine_dates(start=None, today=None, end=None):
 
 def edit_file(filename, editor):
     if editor is None:
-        editor = os.environ.get('EDITOR', 'vim')
+        if sys.platform == 'win32':
+            editor = os.environ.get('EDITOR', 'gvim.bat')
+        else:
+            editor = os.environ.get('EDITOR', 'vim')
     print('Editing file {!r} with {}'.format(filename, editor))
     subprocess.call((editor, filename), close_fds=True)
 
@@ -2094,9 +2102,9 @@ def report_events(things, today, enbolden=True, paginate=True, with_week_number=
     prev = None
     prev_date = None
     spacer = 4+1+3+1+2+1+3+1+1
-    spacer_line = ' {}{}'.format(' '*spacer, '-'*(78-spacer))
     if with_week_number:
-        spacer_line = '   {}'.format(spacer_line)
+        spacer += 3
+    spacer_line = ' {}{}'.format(' '*spacer, '-'*(78-spacer))
     lines = []
     for date, text, event in sorted(things):
         iso_year, week_number, weekday = date.isocalendar()
@@ -2442,13 +2450,17 @@ def report(args):
             start = datetime.date(1900, 1, 1)
         elif word == '-for':
             today = get_cmdline_date(word, args)
+        elif word == '-around':
+            today = get_cmdline_date(word, args)
+            start = today - ONE_FORTNIGHT
+            end   = today + ONE_FORTNIGHT
         elif word == '-noweek':
             with_week_number = False
         elif word == '-nobold':
             enbolden = False
         elif word == '-nopage':
             paginate = False
-        elif word == '-edit':
+        elif word in ('-e', '-edit'):
             action = 'edit'
             if args:
                 next_word = args[0]
