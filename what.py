@@ -45,13 +45,16 @@ In each of the switches that take a <date>, it may be any of:
 -m, -month      set the end date to a month after "today"
 -2m, -2months   set the end date to two months after "today"
 -3m, -3months   set the end date to two months after "today"
--y, -year       set the end date to a year after "today"
+                ...and so on up to 11m
+-y, -1y, -year  set the end date to a year after "today"
+-2y             ditto for 2 years
 
 -christmas      report on the month around Christmas (of this year)
 -xmas           the same
 -easter         report on the month around Easter, of this year or of next
                 year, depending on whether we're more than a fortnight after
                 this Easter
+-this-year      report on this year, from jan-01 through dec-31
 
 -cal            print a simple calendar for this month
 -cal <mon>      print a simple calendar for month <mon> of this year
@@ -536,6 +539,7 @@ def calc_ordinal_day(start, ordinal, day_name):
         if date.month != start.month:
             return None
     elif ordinal == -1:
+        first_weekday, month_len = calendar.monthrange(start.year, start.month)
         last_day_of_month = start.replace(day=month_len)
         date = day_before_date(last_day_of_month, day_name, True)
     elif ordinal == -2:
@@ -978,9 +982,9 @@ class Event(object):
                         dates.add(d)
                     # And look to the next month
                     if this.month < 12:
-                        this = this.replace(month=this.month+1)
+                        this = this.replace(month=this.month+1, day=1)
                     else:
-                        this = this.replace(month=1, year=this.year+1)
+                        this = this.replace(month=1, day=1, year=this.year+1)
 
 
         if self.not_on:
@@ -2391,25 +2395,49 @@ def get_cmdline_date(switch, args):
     except IndexError:
         raise GiveUp('Expected a day or date after {!r}'.format(switch))
 
-    parts = text.split('-')
-    if len(parts) == 1:
-        day = _parse_int_day(switch, parts[0])
-        return today.replace(day=day)
-    elif len(parts) == 2:
-        day = _parse_int_day(switch, parts[0])
-        month = _parse_month(switch, parts[1])
-        return today.replace(day=day, month=month)
-    elif len(parts) == 3:
-        day = _parse_int_day(switch, parts[0])
-        month = _parse_month(switch, parts[1])
-        year = _parse_int_year(switch, parts[2])
-        return datetime.date(year, month, day)
-    else:
-        raise GiveUp('Expected a day or date after {!r}, not {!r}'.format(switch, text))
+    try:
+        parts = text.split('-')
+        if len(parts) == 1:
+            day = _parse_int_day(switch, parts[0])
+            return today.replace(day=day)
+        elif len(parts) == 2:
+            day = _parse_int_day(switch, parts[0])
+            month = _parse_month(switch, parts[1])
+            return today.replace(day=day, month=month)
+        elif len(parts) == 3:
+            day = _parse_int_day(switch, parts[0])
+            month = _parse_month(switch, parts[1])
+            year = _parse_int_year(switch, parts[2])
+            return datetime.date(year, month, day)
+        else:
+            raise GiveUp('Expected a day or date after {!r}, not {!r}'.format(switch, text))
+    except ValueError as e:
+        raise GiveUp('{}: {}\n'
+                'With day {} month {} year {}'.format(e.__class__.__name__,
+                    e, parts[0], parts[1], parts[2]))
+
+def get_n_month_end(n, today):
+    """If asked for 'n' months from today, return the end date
+    """
+    if n < 1:
+        raise GiveUp('Number of months for "next N months" must be 1 or more,'
+                ' not {}'.format(n))
+
+    this_month = today.month
+    end_month = this_month + n
+    end_year  = today.year
+    while end_month > 12:
+        end_month -= 12
+        end_year += 1
+    try:
+        end = today.replace(month=end_month, year=end_year)
+    except ValueError:
+        # If we started on Feb 29 and get an invalid date, guess Feb 28
+        end = today.replace(month=end_month, year=end_year, day=today.day-1)
+    return end
 
 def report(args):
     filename = None
-    show_comments = False
     action = 'report'
     today = datetime.date.today()
     start = None
@@ -2489,42 +2517,46 @@ def report(args):
             return
         elif word in ('-w', '-week'):
             end = today + datetime.timedelta(days=7)
-        elif word in ('-m', '-month'):
-            if today.month == 12:
-                end = today.replace(month=1, year=today.year+1)
-            else:
-                end = today.replace(month=today.month+1)
+        elif word in ('-m', '-1m', '-month'):
+            end = get_n_month_end(1, today)
         elif word in ('-2m', '-2months'):
-            if today.month == 11:
-                end = today.replace(month=1, year=today.year+1)
-            elif today.month == 12:
-                end = today.replace(month=2, year=today.year+1)
-            else:
-                end = today.replace(month=today.month+2)
+            end = get_n_month_end(2, today)
         elif word in ('-3m', '-3months'):
-            if today.month == 10:
-                end = today.replace(month=1, year=today.year+1)
-            elif today.month == 11:
-                end = today.replace(month=2, year=today.year+1)
-            elif today.month == 12:
-                end = today.replace(month=3, year=today.year+1)
-            else:
-                end = today.replace(month=today.month+3)
-        elif word in ('-y','-year'):
-            end = today.replace(year=today.year+1)
-        elif word == '-2y':     # XXX undocumented
-            end = today.replace(year=today.year+2)
-        elif word in ('-easter'):   # XXX undocumented
+            end = get_n_month_end(3, today)
+        elif word in ('-4m', '-4months'):
+            end = get_n_month_end(4, today)
+        elif word in ('-5m', '-5months'):
+            end = get_n_month_end(5, today)
+        elif word in ('-6m', '-6months'):
+            end = get_n_month_end(6, today)
+        elif word in ('-7m', '-7months'):
+            end = get_n_month_end(7, today)
+        elif word in ('-8m', '-8months'):
+            end = get_n_month_end(8, today)
+        elif word in ('-9m', '-9months'):
+            end = get_n_month_end(9, today)
+        elif word in ('-10m', '-10months'):
+            end = get_n_month_end(10, today)
+        elif word in ('-11m', '-11months'):
+            end = get_n_month_end(11, today)
+        elif word in ('-y','-1y','-year'):
+            end = get_n_month_end(12, today)
+        elif word == '-2y':
+            end = get_n_month_end(24, today)
+        elif word in ('-easter'):
             easter = calc_easter(today.year)
             if easter < (today - ONE_FORTNIGHT):
                 easter = calc_easter(today.year+1)
             today = easter
             start = today - ONE_FORTNIGHT
             end = today + ONE_FORTNIGHT
-        elif word in ('-christmas', '-xmas'):   # XXX undocumented
+        elif word in ('-christmas', '-xmas'):
             today = datetime.date(month=12, day=25, year=today.year)
             start = today - ONE_FORTNIGHT
             end = today + ONE_FORTNIGHT
+        elif word in ('-this-year', '-thisyear'):
+            start = datetime.date(month=1, day=1, year=today.year)
+            end = datetime.date(month=12, day=31, year=today.year)
         elif word[0] == '-' and not os.path.exists(word):
             raise GiveUp('Unexpected switch {!r}'.format(word))
         elif word[0] == '@':
