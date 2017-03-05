@@ -2,6 +2,17 @@
 what.py - a simple event reporting script
 =========================================
 
+Introduction
+============
+I wanted a tool that would allow me to add events to a text file, and view
+those which are upcoming, or near a particular date. I couldn't find anything
+that quite did what I wanted, so I wrote something for myself. As such, it
+doesn't attempt to be an all-singing, all-dancing solution - it just does
+those things I have needed it to do.
+
+The way I use it is to keep a copy of ``what.py`` in my Dropbox folder, with
+the ``what.txt`` file that defines the events next to it. This gives me a
+crude way of having the event information available on multiple computers.
 Usage
 =====
 ::
@@ -15,6 +26,7 @@ Usage
                   works with -help text, etc)
   -h related      show some information on related programs that I ended up
                   not quite using
+  -h readme       outputs the content of the README.rst file
   
   -for <date>     set the date to be used for "today". Otherwise, today's
                   actual date is used.
@@ -22,6 +34,9 @@ Usage
                   reported. Otherwise, the day before "today" is used.
   -end <date>     set the date to be used as the end of the range to be
                   reported. Otherwise, four weeks after "today" is used.
+  
+  -around <date>  set <start> a fortnight before <date>, <end> a fortnight
+                  after, and <today> to <date>.
   
   -from <date>    synonym for -start <date>
   -to <date>      synonum for -end <date>
@@ -34,12 +49,24 @@ Usage
      * <day>-<month>-<year>
      * <day>-<month-name>-<year>
   
-  -week           set the end date to a week after "today"
-  -month          set the end date to a month after "today"
-  -year           set the end date to a year after "today"
+  -w, -week       set the end date to a week after "today"
+  -m, -month      set the end date to a month after "today"
+  -2m, -2months   set the end date to two months after "today"
+  -3m, -3months   set the end date to two months after "today"
+                  ...and so on up to 11m
+  -y, -1y, -year  set the end date to a year after "today"
+  -2y             ditto for 2 years
   
-  -cal <year> <month>
-                  print a simple calendar for the given month
+  -christmas      report on the month around Christmas (of this year)
+  -xmas           the same
+  -easter         report on the month around Easter, of this year or of next
+                  year, depending on whether we're more than a fortnight after
+                  this Easter
+  -this-year      report on this year, from jan-01 through dec-31
+  
+  -cal            print a simple calendar for this month
+  -cal <mon>      print a simple calendar for month <mon> of this year
+  -cal <mon> <y>  print a simple calendar for month <mon> of year <y>
   -today          print out todays date
   
   @<word>         only include events that include this @<word> in their text.
@@ -64,14 +91,17 @@ Usage
   <filename>      the name of the file to read events from. The default
                   is "what.txt" in the same directory as this script.
   
-  -edit           Edit the events file, using the editor named in the
-                  EDITOR environment variable, or 'vim' by default.
+  -edit [<prog>]  Edit the events file. If <prog> is given, then it should be the
+                  editor to use (e.g., gvim or /usr/bin/sed). Otherwise the
+                  editor named in the EDITOR environment variable will be used,
+                  and if that is not set or cannot be found, 'vim' will be tried.
                   This can be useful if the file is somewhere unobvious.
   
   -nopage         Don't page the output of the list of events (only the "default"
                   output of events is paged, and then only if necessary)
   -nobold         Don't try to enbolden the current date. Useful if piping
                   to a file.
+  -noweek         Don't put the week number at the start of each event line.
   
   -atwords        report on which @<words> are used in the events file.
   -at_words       synonym for -atwords
@@ -86,9 +116,10 @@ Usage
                   for debugging the interpretation of said data. Again, the
                   default start date will be 01-01-1900.
   -doctest        run the internal doctests
-  
+
 The contents of the event file
 ==============================
+
 Comments and empty lines
 ------------------------
 Comments start with '#' and end at end-of-line.
@@ -133,20 +164,20 @@ matters. A <colon-date> may be any of:
 * :every day <day> -- every month on that date, ':every day 8'.
   Note that this will not set an event in months which do not have that
   date.
-* :first <nam> -- the first day of that name in a month, ':first Mon'
-* :second <nam> -- the second day of that name in a month
+* :first <nam> -- the first day of that name in each month, ':first Mon'
+* :second <nam> -- the second day of that name in each month
 * :third <nam>
 * :fourth <nam>
 * :fifth <nam>
-* :last <nam> -- the last day of that name in a month
-* :lastbutone <nam> -- the penultimate day of that name in a month
+* :last <nam> -- the last day of that name in each month
+* :lastbutone <nam> -- the penultimate day of that name in each month
 * :easter <nam> [<year>] -- where <nam> is 'Fri', 'Sat', 'Sun' or 'Mon'
   ('easter Fri' means the Friday of Easter in that current year), or
 * :easter <index> [<year>], where <index> is relative to Easter Sunday, so
   ':easter -1 2013' would mean the same as ':easter Sat 2013'.
   case, if the <year> is omitted, then the "start" year is used, and the
   event is set to repeat each Easter on that (relative) day. Note that
-  if a ':easter' event is followed by ':yearly', then that is the meaning
+  if a ':easter' event is followed by ':yearly', then that iseachthe meaning
   it has, a repetition on that day relative to Easter, not a repetition of
   that *particular* date.
 
@@ -229,6 +260,8 @@ it matches). A continuation line must start with a <colon-word>.The
   does not exactly match the recurrence of the preceding event, then the last
   occurrence is the one before this date. Note that if you specify ':until'
   but don't specify an actual repeat frequency, it will assume daily.
+  If you specify multiple ':until' conditions, the earliest will end up being
+  used.
 * :weekly -- the preceding event occurs weekly, i.e., every week on the
   same day.
 * :fortnightly -- the preceding event occurs fortnightly, i.e., every
@@ -242,11 +275,17 @@ it matches). A continuation line must start with a <colon-word>.The
 * :every <count> days -- the preceding event occurs every <count> days,
   starting on the original date. ':every 7 days' is thus the same as
   ':weekly'. I apologise in advance for ':every 1 days'.
-* :for <count> days -- for that many days, including the original date
+* :for <count> days -- for that many days, including the original date. This
+  actually gets turned into an appropriate ':until <date>'.
 * :for <count> weekdays -- for that many Mon..Fri days. Note that if the
-  original date is a Sat or Sun, it/they won't count to the total. Works
-  exactly as if it were a combination of ':for <n> days' with the internal
-  weekend days excluded using ':except <weekend-day>'.
+  original date is a Sat or Sun, it will have already been added as an event
+  - this only affects dates *after* that. It works exactly as if it were a
+  combination of an appropriate ':until <date>' with the internal weekend
+  days excluded using ':except <weekend-day>'.
+
+Note that it is not defined what happens if you specify contradictory or
+clashing conditions - for instance saying ':until <some-date>' and then
+also saying ':for 5 weekdays', when those two do not have an identical effect.
 
 Possible future developments
 ----------------------------
@@ -286,7 +325,7 @@ Given the following event file::
   2001* Oct  7, @Birthday: @Charles is :age, born in :year
   
   # From https://www.gov.uk/bank-holidays
-  2014 Jan  1 Wed, @pubhol New Year’s Day
+  2014 Jan  1 Wed, @pubhol New Year's Day
   :easter Fri 2014, @pubhol Good Friday
   :easter Mon 2014, @pubhol Easter Monday
   2014 May  5 Mon, @pubhol Early May bank holiday
@@ -369,7 +408,7 @@ and assuming that today's date is 3rd October 2013,we see:
     @birthday   3 times
     @charles    2 times
     @pubhol     8 times
-  
+
 Other tools I considered
 ========================
 There were three tools I seriously looked into using before I wrote 'what'.
@@ -433,4 +472,3 @@ of the week.
 Should I have learnt enough Perl to be able to contribute to 'when', and
 try to get the features I wanted added in? Perhaps, but in the end writing
 this program myself was more fun...
-
