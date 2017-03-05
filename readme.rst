@@ -35,7 +35,6 @@ Usage
                   works with -help text, etc)
   -h related      show some information on related programs that I ended up
                   not quite using
-  -h readme       outputs the content of the README.rst file
   
   -for <date>     set the date to be used for "today". Otherwise, today's
                   actual date is used.
@@ -125,7 +124,7 @@ Usage
                   for debugging the interpretation of said data. Again, the
                   default start date will be 01-01-1900.
   -doctest        run the internal doctests
-
+  
 The contents of the event file
 ==============================
 
@@ -334,7 +333,7 @@ Given the following event file::
   2001* Oct  7, @Birthday: @Charles is :age, born in :year
   
   # From https://www.gov.uk/bank-holidays
-  2014 Jan  1 Wed, @pubhol New Year's Day
+  2014 Jan  1 Wed, @pubhol New Year’s Day
   :easter Fri 2014, @pubhol Good Friday
   :easter Mon 2014, @pubhol Easter Monday
   2014 May  5 Mon, @pubhol Early May bank holiday
@@ -379,22 +378,22 @@ and assuming that today's date is 3rd October 2013,we see:
 
   $ ./what.py
   Reading events from './what.txt'
-   Wed  2 Oct 2013, Daniel visiting
-   Sat  5 Oct 2013, @Alfred Full Backup
-                    -------------------------------------------------------------
-   Mon  7 Oct 2013, @Birthday: @Charles is 12, born in 2001
-   Wed  9 Oct 2013, @Birthday: @Alfred is 33, born in 1980
-   Thu 10 Oct 2013, 17:00 @Charles Singing lesson
-                    -------------------------------------------------------------
-   Tue 15 Oct 2013, @Bethany Ipswich
-   Thu 17 Oct 2013, 17:00 @Charles Singing lesson
-                    -------------------------------------------------------------
-   Thu 24 Oct 2013, 17:00 @Charles Singing lesson
-   Fri 25 Oct 2013, 10:00..17:00, Newmarket (Christmas) Craft Fair
-   Sat 26 Oct 2013, 10:00..17:00, Newmarket (Christmas) Craft Fair
-   Sun 27 Oct 2013, 10:00..16:00, Newmarket (Christmas) Craft Fair
-                    -------------------------------------------------------------
-   Thu 31 Oct 2013, 17:00 @Charles Singing lesson
+  40  Wed  2 Oct 2013, Daniel visiting
+  40  Sat  5 Oct 2013, @Alfred Full Backup
+                       ----------------------------------------------------------
+  41  Mon  7 Oct 2013, @Birthday: @Charles is 12, born in 2001
+  41  Wed  9 Oct 2013, @Birthday: @Alfred is 33, born in 1980
+  41  Thu 10 Oct 2013, 17:00 @Charles Singing lesson
+                       ----------------------------------------------------------
+  42  Tue 15 Oct 2013, @Bethany Ipswich
+  42  Thu 17 Oct 2013, 17:00 @Charles Singing lesson
+                       ----------------------------------------------------------
+  43  Thu 24 Oct 2013, 17:00 @Charles Singing lesson
+  43  Fri 25 Oct 2013, 10:00..17:00, Newmarket (Christmas) Craft Fair
+  43  Sat 26 Oct 2013, 10:00..17:00, Newmarket (Christmas) Craft Fair
+  43  Sun 27 Oct 2013, 10:00..16:00, Newmarket (Christmas) Craft Fair
+                       ----------------------------------------------------------
+  44  Thu 31 Oct 2013, 17:00 @Charles Singing lesson
   
   start 2013-10-02 .. yesterday 2013-10-02 .. today 2013-10-03 .. end 2013-10-31
   
@@ -402,8 +401,8 @@ and assuming that today's date is 3rd October 2013,we see:
 
   $ ./what.py @birthday @pubhol
   Reading events from './what.txt'
-   Mon  7 Oct 2013, @Birthday: @Charles is 12, born in 2001
-   Wed  9 Oct 2013, @Birthday: @Alfred is 33, born in 1980
+  41  Mon  7 Oct 2013, @Birthday: @Charles is 12, born in 2001
+  41  Wed  9 Oct 2013, @Birthday: @Alfred is 33, born in 1980
   
   start 2013-10-02 .. yesterday 2013-10-02 .. today 2013-10-03 .. end 2013-10-31
   
@@ -417,7 +416,7 @@ and assuming that today's date is 3rd October 2013,we see:
     @birthday   3 times
     @charles    2 times
     @pubhol     8 times
-
+  
 Other tools I considered
 ========================
 There were three tools I seriously looked into using before I wrote 'what'.
@@ -481,3 +480,4 @@ of the week.
 Should I have learnt enough Perl to be able to contribute to 'when', and
 try to get the features I wanted added in? Perhaps, but in the end writing
 this program myself was more fun...
+

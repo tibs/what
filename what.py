@@ -9,32 +9,6 @@ from __future__ import print_function
 # -----------------------------------------------------------------------------
 # Help texts
 
-introduction = """\
-=========================================
-what.py - a simple event reporting script
-=========================================
-
-Introduction
-============
-I wanted a tool that would allow me to add events to a text file, and view
-those which are upcoming, or near a particular date. I couldn't find anything
-that quite did what I wanted, so I wrote something for myself. As such, it
-doesn't attempt to be an all-singing, all-dancing solution - it just does
-those things I have needed it to do.
-
-The way I use it is to keep a copy of ``what.py`` in my Dropbox folder, with
-the ``what.txt`` file that defines the events next to it. This gives me a
-crude way of having the event information available on multiple computers.
-That is also why it is one monolithic script, instead of being nicely arranged
-as a proper package.
-
-The script runs on Linux and Mac, and should run on Windows (although I've not
-necessarily tested it there since Windows 98). It is written to use Python 2
-because of the original limitations of the computers it was used on (see the
-aforesaid mention of Windows, in particular). However, it *should* be
-Python 3 compatible.
-"""
-
 usage_text = """\
     ./report.py [<stuff>]
 
@@ -45,7 +19,6 @@ usage_text = """\
                 works with -help text, etc)
 -h related      show some information on related programs that I ended up
                 not quite using
--h readme       outputs the content of the README.rst file
 
 -for <date>     set the date to be used for "today". Otherwise, today's
                 actual date is used.
@@ -336,103 +309,6 @@ On the command line, it might be nice if one said '-for <day> <mon>' or
 '-for <day> <mon> <year>' instead of needing all the hyphens inside the
 dates. That would, of course, make command line parsing that bit more
 complicated.
-"""
-
-# Beware that these were written by hand and are not automatically checked
-# for continued correctness
-examples = """\
-Examples
-========
-Given the following event file::
-
-  1980* Oct  9, @Birthday: @Alfred is :age, born in :year
-  1983* Jan 29, @Birthday: @Bethany is :age, born in :year
-  2001* Oct  7, @Birthday: @Charles is :age, born in :year
-  
-  # From https://www.gov.uk/bank-holidays
-  2014 Jan  1 Wed, @pubhol New Year's Day
-  :easter Fri 2014, @pubhol Good Friday
-  :easter Mon 2014, @pubhol Easter Monday
-  2014 May  5 Mon, @pubhol Early May bank holiday
-  2014 May 26 Mon, @pubhol Spring bank holiday
-  2014 Aug 25 Mon, @pubhol Summer bank holiday
-  2014 Dec 25 Thu, @pubhol Christmas Day
-  2014 Dec 26 Fri, @pubhol Boxing Day
-  
-  # -----------------------------------------------------------------------------
-  # Regular events
-  :easter Fri 2013, Eastercon
-  
-  :every dec 25, Christmas Day
-  :every dec 26, Boxing Day
-  
-  :every Thu, 17:00 @Charles Singing lesson 
-    :except 2013 Oct 3, Doing something else
-  
-  :first Tue, @Bethany Ipswich
-  :third Tue, @Bethany Ipswich
-  :first Tue, 19:30 @Alfred Python User Group
-  
-  # Full backups happen overnight on the first Saturday of each month
-  :first Sat, @Alfred Full Backup
-  
-  # -----------------------------------------------------------------------------
-  # And actual events
-  2013 Oct  2 Wed, Daniel visiting
-  2013 Oct 25 Fri, 10:00..17:00, Newmarket (Christmas) Craft Fair
-       :for 2 days
-  2013 Oct 27 Sun, 10:00..16:00, Newmarket (Christmas) Craft Fair
-  
-  
-and assuming that today's date is 3rd October 2013,we see:
-::
-
-  $ ./what.py -today
-  Today is Thu 3 Oct 2013, 2013-10-03
-  
-
-::
-
-  $ ./what.py
-  Reading events from './what.txt'
-   Wed  2 Oct 2013, Daniel visiting
-   Sat  5 Oct 2013, @Alfred Full Backup
-                    -------------------------------------------------------------
-   Mon  7 Oct 2013, @Birthday: @Charles is 12, born in 2001
-   Wed  9 Oct 2013, @Birthday: @Alfred is 33, born in 1980
-   Thu 10 Oct 2013, 17:00 @Charles Singing lesson
-                    -------------------------------------------------------------
-   Tue 15 Oct 2013, @Bethany Ipswich
-   Thu 17 Oct 2013, 17:00 @Charles Singing lesson
-                    -------------------------------------------------------------
-   Thu 24 Oct 2013, 17:00 @Charles Singing lesson
-   Fri 25 Oct 2013, 10:00..17:00, Newmarket (Christmas) Craft Fair
-   Sat 26 Oct 2013, 10:00..17:00, Newmarket (Christmas) Craft Fair
-   Sun 27 Oct 2013, 10:00..16:00, Newmarket (Christmas) Craft Fair
-                    -------------------------------------------------------------
-   Thu 31 Oct 2013, 17:00 @Charles Singing lesson
-  
-  start 2013-10-02 .. yesterday 2013-10-02 .. today 2013-10-03 .. end 2013-10-31
-  
-::
-
-  $ ./what.py @birthday @pubhol
-  Reading events from './what.txt'
-   Mon  7 Oct 2013, @Birthday: @Charles is 12, born in 2001
-   Wed  9 Oct 2013, @Birthday: @Alfred is 33, born in 1980
-  
-  start 2013-10-02 .. yesterday 2013-10-02 .. today 2013-10-03 .. end 2013-10-31
-  
-::
-
-  $ ./what.py -atwords
-  Reading events from './what.txt'
-  The following @<words> are used in ./what.txt:
-    @alfred     3 times
-    @bethany    3 times
-    @birthday   3 times
-    @charles    2 times
-    @pubhol     8 times
 """
 
 related_text = """\
@@ -2591,20 +2467,6 @@ def report(args):
                     page(related_text)
                 else:
                     print(related_text)
-                return
-            elif args and args[0] == 'readme':
-                sys.stdout.write(introduction)
-                sys.stdout.write('\n')
-                sys.stdout.write('Usage\n')
-                sys.stdout.write('=====\n::\n\n')
-                for line in usage_text.splitlines():
-                    sys.stdout.write('  %s\n' % line)
-                sys.stdout.write('\n')
-                sys.stdout.write(file_content_text)
-                sys.stdout.write('\n')
-                sys.stdout.write(examples)
-                sys.stdout.write('\n')
-                sys.stdout.write(related_text)
                 return
             else:
                 if paginate:
