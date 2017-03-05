@@ -13,6 +13,15 @@ those things I have needed it to do.
 The way I use it is to keep a copy of ``what.py`` in my Dropbox folder, with
 the ``what.txt`` file that defines the events next to it. This gives me a
 crude way of having the event information available on multiple computers.
+That is also why it is one monolithic script, instead of being nicely arranged
+as a proper package.
+
+The script runs on Linux and Mac, and should run on Windows (although I've not
+necessarily tested it there since Windows 98). It is written to use Python 2
+because of the original limitations of the computers it was used on (see the
+aforesaid mention of Windows, in particular). However, it *should* be
+Python 3 compatible.
+
 Usage
 =====
 ::
