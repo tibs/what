@@ -1,6 +1,10 @@
 #! /usr/bin/env python2
+
 """A "what happens when" utility, vaguely inspired by "when"
 """
+
+# This code is jointly licensed under an MIT license and under Creative Commons
+# CC0 ("No Rights Reserved"). Please use whichever is most convenient.
 
 # We stay with Python 2 for maximum portability, but assume 2.7
 from __future__ import division
