@@ -8,10 +8,10 @@ I wanted a tool that would allow me to add events to a text file, and view
 those which are upcoming, or near a particular date. I couldn't find anything
 that quite did what I wanted, so I wrote something for myself. As such, it
 doesn't attempt to be an all-singing, all-dancing solution - it just does
-those things I have needed it to do.
+those things I needed it to do.
 
-The way I use it is to keep a copy of ``what.py`` in my Dropbox folder, with
-the ``what.txt`` file that defines the events next to it. This gives me a
+The way I used it was to keep a copy of ``what.py`` in my Dropbox folder, with
+the ``what.txt`` file that defines the events next to it. This gave me a
 crude way of having the event information available on multiple computers.
 That is also why it is one monolithic script, instead of being nicely arranged
 as a proper package.
