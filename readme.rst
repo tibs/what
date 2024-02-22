@@ -17,10 +17,13 @@ That is also why it is one monolithic script, instead of being nicely arranged
 as a proper package.
 
 The script runs on Linux and Mac, and should run on Windows (although I've not
-necessarily tested it there since Windows 98). It is written to use Python 2
+necessarily tested it there since Windows 98). It was written to use Python 2
 because of the original limitations of the computers it was used on (see the
 aforesaid mention of Windows, in particular). However, it *should* be
-Python 3 compatible.
+Python 3 compatible, and seemed to work when I gave it a quick try recently.
+
+  (My need for this tool rather went away, so it hasn't been used since, gosh,
+  2017!)
 
 Usage
 =====

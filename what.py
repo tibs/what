@@ -1,4 +1,4 @@
-#! /usr/bin/env python2
+#! /usr/bin/env python
 
 """A "what happens when" utility, vaguely inspired by "when"
 """
@@ -1124,8 +1124,8 @@ def colon_event_first(colon_word, words, start):
         ...     [r':first Sat, Full Backup'], start)
         >>> # And that should not be empty
         >>> find_events(events, start, end)
-        set([(datetime.date(2013, 11, 2), 'Full Backup', 2013 Oct  5 Sat, Full Backup
-          :first Sat)])
+        {(datetime.date(2013, 11, 2), 'Full Backup', 2013 Oct  5 Sat, Full Backup
+          :first Sat)}
     """
     if len(words) != 1:
         raise GiveUp('Expected a day name, in {}'.format(
