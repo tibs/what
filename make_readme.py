@@ -1,4 +1,4 @@
-#! /usr/bin/env python2
+#! /usr/bin/env python
 """Generate a readme.rst
 """
 
@@ -21,19 +21,22 @@ I wanted a tool that would allow me to add events to a text file, and view
 those which are upcoming, or near a particular date. I couldn't find anything
 that quite did what I wanted, so I wrote something for myself. As such, it
 doesn't attempt to be an all-singing, all-dancing solution - it just does
-those things I have needed it to do.
+those things I needed it to do.
 
-The way I use it is to keep a copy of ``what.py`` in my Dropbox folder, with
-the ``what.txt`` file that defines the events next to it. This gives me a
+The way I used it was to keep a copy of ``what.py`` in my Dropbox folder, with
+the ``what.txt`` file that defines the events next to it. This gave me a
 crude way of having the event information available on multiple computers.
 That is also why it is one monolithic script, instead of being nicely arranged
 as a proper package.
 
 The script runs on Linux and Mac, and should run on Windows (although I've not
-necessarily tested it there since Windows 98). It is written to use Python 2
+necessarily tested it there since Windows 98). It was written to use Python 2
 because of the original limitations of the computers it was used on (see the
 aforesaid mention of Windows, in particular). However, it *should* be
-Python 3 compatible.
+Python 3 compatible, and seemed to work when I gave it a quick try recently.
+
+  (My need for this tool rather went away, so it hasn't been used since, gosh,
+  2017!)
 """
 
 def indent(text, indentation='  '):
@@ -65,22 +68,22 @@ with open(os.path.join(this_dir, 'README.rst'), 'w') as fd:
                  "we see:\n")
 
         # Note we force the date used for "today", but don't report that
-        text = check_output(['./what.py', '-for', '3-oct-2013', '-today'])
+        text = check_output(['./what.py', '-for', '3-oct-2013', '-today'], text=True)
         fd.write('::\n\n  $ ./what.py -today\n')
         fd.write(indent(text))
         fd.write('\n\n')
 
-        text = check_output(['./what.py', '-for', '3-oct-2013'])
+        text = check_output(['./what.py', '-for', '3-oct-2013'], text=True)
         fd.write('::\n\n  $ ./what.py\n')
         fd.write(indent(text))
         fd.write('\n')
 
-        text = check_output(['./what.py', '-for', '3-oct-2013', '@birthday', '@pubhol'])
+        text = check_output(['./what.py', '-for', '3-oct-2013', '@birthday', '@pubhol'], text=True)
         fd.write('::\n\n  $ ./what.py @birthday @pubhol\n')
         fd.write(indent(text))
         fd.write('\n')
 
-        text = check_output(['./what.py', '-for', '3-oct-2013', '-atwords'])
+        text = check_output(['./what.py', '-for', '3-oct-2013', '-atwords'], text=True)
         fd.write('::\n\n  $ ./what.py -atwords\n')
         fd.write(indent(text))
         fd.write('\n')
